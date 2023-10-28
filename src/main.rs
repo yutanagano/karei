@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::{self, Write};
 use std::ops::{Index, IndexMut};
 
@@ -105,7 +106,7 @@ impl Position {
         let mut col_counter = 0;
 
         for square in self.board.iter() {
-            print!("{}", square.char_representation());
+            print!("{}", square);
 
             col_counter += 1;
             col_counter = col_counter % 8;
@@ -114,8 +115,11 @@ impl Position {
                 print!("\n");
             }
         }
-
         io::stdout().flush().unwrap();
+
+        println!("{} to move.", self.active_color);
+        println!("White castling rights: {}.", self.castling_rights[Color::White]);
+        println!("Black castling rights: {}.", self.castling_rights[Color::Black]);
     }
 }
 
@@ -125,10 +129,14 @@ struct Square {
     en_passant_square: bool
 }
 
-impl Square {
-    fn char_representation(&self) -> char {
-        if self.occupied_by.is_none() {
-            return '.'
+impl fmt::Display for Square {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+         if self.occupied_by.is_none() {
+            if self.en_passant_square {
+                return write!(f, "*")
+            } else {
+                return write!(f, ".")
+            }
         }
 
         let piece = self.occupied_by.unwrap();
@@ -141,9 +149,9 @@ impl Square {
             PieceType::Rook => 'R'
         };
         if piece.color == Color::White {
-            return letter
+            return write!(f, "{letter}")
         } else {
-            return letter.to_lowercase().next().unwrap()
+            return write!(f, "{}", letter.to_lowercase().next().unwrap())
         }
     }
 }
@@ -168,6 +176,16 @@ enum PieceType {
 enum Color {
     White,
     Black
+}
+
+impl fmt::Display for Color {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let as_str = match self {
+            Color::White => "white",
+            Color::Black => "black"
+        };
+        write!(f, "{as_str}")
+    }
 }
 
 struct CastlingRights {
@@ -198,6 +216,20 @@ impl IndexMut<Color> for CastlingRights {
 struct CastlingRightsForColor {
     kingside: bool,
     queenside: bool
+}
+
+impl fmt::Display for CastlingRightsForColor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.kingside & self.queenside {
+            write!(f, "kingside, queenside")
+        } else if self.kingside {
+            write!(f, "kingside")
+        } else if self.queenside {
+            write!(f, "queenside")
+        } else {
+            write!(f, "none")
+        }
+    }
 }
 
 fn main() {
