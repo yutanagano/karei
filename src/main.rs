@@ -1,12 +1,12 @@
+use std::io::{self, Write};
 use std::ops::{Index, IndexMut};
 
 struct Position {
-    board: Board,
+    board: [Square; 64],
     active_color: Color,
     moves_played: u8,
     plies_since_last_capture_or_pawn_advance: u8,
-    white_castling_rights: CastlingRights,
-    black_castling_rights: CastlingRights
+    castling_rights: CastlingRights
 }
 
 impl Position {
@@ -15,8 +15,7 @@ impl Position {
     }
 
     fn from_fen(fen: &str) -> Self {
-        let mut board = Board::new();
-        
+        let mut board = [Square{ occupied_by: None, en_passant_square: false }; 64];
         let mut fen_pieces = fen.split_whitespace();
 
         let piece_placement = match fen_pieces.next() {
@@ -61,42 +60,62 @@ impl Position {
                 occupied_by: Some(Piece { piece_type, color }),
                 en_passant_square: false
             };
+
+            square_index += 1;
         }
+
+        let active_color = match fen_pieces.next() {
+            Some(s) => match s {
+                "w" => Color::White,
+                "b" => Color::Black,
+                _ => panic!("Invalid FEN: Unrecognized color designation: {}", s)
+            },
+            _ => panic!("Invalid FEN: Can't read active color.")
+        };
+
+        let castling_info_string = match fen_pieces.next() {
+            Some(s) => s,
+            _ => panic!("Invalid FEN: Can't read castling rights info.")
+        };
+        let mut castling_rights = CastlingRights{
+            white_castling_rights: CastlingRightsForColor { kingside: false, queenside: false },
+            black_castling_rights: CastlingRightsForColor { kingside: false, queenside: false }
+        };
+        for char in castling_info_string.chars() {
+            match char {
+                'K' => castling_rights[Color::White].kingside = true,
+                'Q' => castling_rights[Color::White].queenside = true,
+                'k' => castling_rights[Color::Black].kingside = true,
+                'q' => castling_rights[Color::Black].queenside = true,
+                '-' => {},
+                _ => panic!("Invalid FEN: Unrecognized castling right character: {}.", char)
+            }
+        };
 
         Position {
             board,
-            active_color: Color::White,
+            active_color,
             moves_played: 1,
             plies_since_last_capture_or_pawn_advance: 0,
-            white_castling_rights: CastlingRights { kingside: true, queenside: true },
-            black_castling_rights: CastlingRights { kingside: true, queenside: true }
+            castling_rights,
         }
     }
-}
 
-struct Board {
-    squares: [Square; 64]
-}
+    fn print(&self) {
+        let mut col_counter = 0;
 
-impl Board {
-    fn new() -> Self {
-        Board {
-            squares: [Square { occupied_by: None, en_passant_square: false }; 64]
+        for square in self.board.iter() {
+            print!("{}", square.char_representation());
+
+            col_counter += 1;
+            col_counter = col_counter % 8;
+
+            if col_counter == 0 {
+                print!("\n");
+            }
         }
-    }
-}
 
-impl Index<usize> for Board {
-    type Output = Square;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.squares[index]
-    }
-}
-
-impl IndexMut<usize> for Board {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.squares[index]
+        io::stdout().flush().unwrap();
     }
 }
 
@@ -104,6 +123,29 @@ impl IndexMut<usize> for Board {
 struct Square {
     occupied_by: Option<Piece>,
     en_passant_square: bool
+}
+
+impl Square {
+    fn char_representation(&self) -> char {
+        if self.occupied_by.is_none() {
+            return '.'
+        }
+
+        let piece = self.occupied_by.unwrap();
+        let letter = match piece.piece_type {
+            PieceType::Pawn => 'P',
+            PieceType::King => 'K',
+            PieceType::Queen => 'Q',
+            PieceType::Bishop => 'B',
+            PieceType::Knight => 'K',
+            PieceType::Rook => 'R'
+        };
+        if piece.color == Color::White {
+            return letter
+        } else {
+            return letter.to_lowercase().next().unwrap()
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -122,18 +164,44 @@ enum PieceType {
     Rook
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 enum Color {
     White,
     Black
 }
 
 struct CastlingRights {
+    white_castling_rights: CastlingRightsForColor,
+    black_castling_rights: CastlingRightsForColor
+}
+
+impl Index<Color> for CastlingRights {
+    type Output = CastlingRightsForColor;
+
+    fn index(&self, index: Color) -> &Self::Output {
+        match index {
+            Color::White => &self.white_castling_rights,
+            Color::Black => &self.black_castling_rights
+        }
+    }
+}
+
+impl IndexMut<Color> for CastlingRights {
+    fn index_mut(&mut self, index: Color) -> &mut Self::Output {
+        match index {
+            Color::White => &mut self.white_castling_rights,
+            Color::Black => &mut self.black_castling_rights
+        }
+    }
+}
+
+struct CastlingRightsForColor {
     kingside: bool,
     queenside: bool
 }
 
 fn main() {
     println!("Hello, world!");
-    let _position = Position::new();
+    let position = Position::new();
+    position.print();
 }
