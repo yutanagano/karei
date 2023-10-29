@@ -2,8 +2,9 @@ use std::fmt;
 use std::io::{self, Write};
 use std::ops::{Index, IndexMut};
 
+
 pub struct Position {
-    board: [Square; 64],
+    board: Board,
     active_color: Color,
     moves_played: u8,
     plies_since_last_capture_or_pawn_advance: u8,
@@ -16,7 +17,7 @@ impl Position {
     }
 
     pub fn from_fen(fen: &str) -> Self {
-        let mut board = [Square{ occupied_by: None, en_passant_square: false }; 64];
+        let mut board = Board::new();
         let mut fen_pieces = fen.split_whitespace();
 
         let piece_placement = match fen_pieces.next() {
@@ -57,7 +58,7 @@ impl Position {
                 false => Color::Black
             };
 
-            board[square_index] = Square {
+            board.squares[square_index] = Square {
                 occupied_by: Some(Piece { piece_type, color }),
                 en_passant_square: false
             };
@@ -93,11 +94,32 @@ impl Position {
             }
         };
 
+        let en_passant_square = match fen_pieces.next() {
+            Some(s) => match s {
+                "-" => None,
+                coords => Some(Coordinate::try_from(coords).unwrap())
+            },
+            None => panic!("Invalid FEN: Missing en passant info.")
+        };
+        if let Some(coord) = en_passant_square {
+            board[coord].en_passant_square = true
+        };
+
+        let plies_since_last_capture_or_pawn_advance: u8 = match fen_pieces.next() {
+            Some(s) => s.parse().unwrap(),
+            None => panic!("Invalid FEN: Missing ply info.")
+        };
+
+        let moves_played: u8 = match fen_pieces.next() {
+            Some(s) => s.parse().unwrap(),
+            None => panic!("Invalid FEN: Missing move count info.")
+        };
+
         Position {
             board,
             active_color,
-            moves_played: 1,
-            plies_since_last_capture_or_pawn_advance: 0,
+            moves_played,
+            plies_since_last_capture_or_pawn_advance,
             castling_rights,
         }
     }
@@ -105,7 +127,7 @@ impl Position {
     pub fn print(&self) {
         let mut col_counter = 0;
 
-        for square in self.board.iter() {
+        for square in self.board.squares.iter() {
             print!("{}", square);
 
             col_counter += 1;
@@ -123,10 +145,99 @@ impl Position {
     }
 }
 
+
+#[derive(Copy, Clone)]
+struct Board {
+    squares: [Square; 64]
+}
+
+impl Board {
+    fn new() -> Self {
+        Board { squares: [Square::new_empty(); 64] }
+    }
+}
+
+impl Index<Coordinate> for Board {
+    type Output = Square;
+
+    fn index(&self, index: Coordinate) -> &Self::Output {
+        &self.squares[usize::from(index)]
+    }
+}
+
+impl IndexMut<Coordinate> for Board {
+    fn index_mut(&mut self, index: Coordinate) -> &mut Self::Output {
+        &mut self.squares[usize::from(index)]
+    }
+}
+
+
+struct Coordinate {
+    index: usize
+}
+
+impl From<Coordinate> for usize {
+    fn from(value: Coordinate) -> Self {
+        value.index
+    }
+}
+
+impl TryFrom<&str> for Coordinate {
+    type Error = &'static str;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let mut chars = value.chars();
+        
+        let file: usize = match chars.next() {
+            Some(c) => match c.to_uppercase().next().unwrap() {
+                'A' => 0,
+                'B' => 1,
+                'C' => 2,
+                'D' => 3,
+                'E' => 4,
+                'F' => 5,
+                'G' => 6,
+                'H' => 7,
+                _ => return Err("Unrecognized file.")
+            },
+            None => return Err("Can't convert empty string to coordinate.")
+        };
+
+        let rank = match chars.next() {
+            Some(c) => match c {
+                '1' => 7,
+                '2' => 6,
+                '3' => 5,
+                '4' => 4,
+                '5' => 3,
+                '6' => 2,
+                '7' => 1,
+                '8' => 0,
+                _ => return Err("Unrecognized rank.")
+            }
+            None => return Err("Missing rank.")
+        };
+
+        if !chars.next().is_none() {
+            return Err("str too long.")
+        }
+
+        Ok(Coordinate { index: file + 8*rank })
+    }
+}
+
+
+
 #[derive(Copy, Clone)]
 struct Square {
     occupied_by: Option<Piece>,
     en_passant_square: bool
+}
+
+impl Square {
+    fn new_empty() -> Self {
+        Square { occupied_by: None, en_passant_square: false }
+    }
 }
 
 impl fmt::Display for Square {
@@ -156,11 +267,13 @@ impl fmt::Display for Square {
     }
 }
 
+
 #[derive(Copy, Clone)]
 struct Piece {
     piece_type: PieceType,
     color: Color
 }
+
 
 #[derive(Copy, Clone)]
 enum PieceType {
@@ -171,6 +284,7 @@ enum PieceType {
     Knight,
     Rook
 }
+
 
 #[derive(Copy, Clone, PartialEq)]
 enum Color {
@@ -187,6 +301,7 @@ impl fmt::Display for Color {
         write!(f, "{as_str}")
     }
 }
+
 
 struct CastlingRights {
     white_castling_rights: CastlingRightsForColor,
@@ -212,6 +327,7 @@ impl IndexMut<Color> for CastlingRights {
         }
     }
 }
+
 
 struct CastlingRightsForColor {
     kingside: bool,
