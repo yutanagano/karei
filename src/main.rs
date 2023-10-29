@@ -1,4 +1,4 @@
-use karei::position::Position;
+use karei::Position;
 
 fn main() {
     println!("Hello, world!");
