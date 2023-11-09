@@ -1,6 +1,6 @@
-use karei::Position;
+use karei::GameState;
 
 fn main() {
-    let position = Position::new();
-    position.print();
+    let game_state = GameState::new();
+    game_state.print();
 }
