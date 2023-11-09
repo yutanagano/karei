@@ -131,7 +131,7 @@ impl fmt::Display for Square {
             if self.en_passant_square {
                 return write!(f, "*")
             } else {
-                return write!(f, ".")
+                return write!(f, " ")
             }
         }
 
@@ -141,7 +141,7 @@ impl fmt::Display for Square {
             PieceType::King => 'K',
             PieceType::Queen => 'Q',
             PieceType::Bishop => 'B',
-            PieceType::Knight => 'K',
+            PieceType::Knight => 'N',
             PieceType::Rook => 'R'
         };
         if piece.get_color() == Color::White {

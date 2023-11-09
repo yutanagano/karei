@@ -125,14 +125,16 @@ impl Position {
     pub fn print(&self) {
         let mut col_counter = 0;
 
+        print!("+---+---+---+---+---+---+---+---+\n");
+
         for square in self.board.iter_squares() {
-            print!("{}", square);
+            print!("| {} ", square);
 
             col_counter += 1;
             col_counter = col_counter % 8;
 
             if col_counter == 0 {
-                print!("\n");
+                print!("|\n+---+---+---+---+---+---+---+---+\n");
             }
         }
         io::stdout().flush().unwrap();
@@ -142,6 +144,3 @@ impl Position {
         println!("Black castling rights: {}.", self.castling_rights[Color::Black]);
     }
 }
-
-
-
