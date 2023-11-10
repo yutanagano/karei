@@ -1,8 +1,9 @@
-use crate::board::{Board, Coordinate};
+use crate::board::{Coordinate, Square};
 use crate::castling_rights::CastlingRights;
 use crate::color::Color;
 use crate::piece::{Piece, PieceType};
 use crate::position::Position;
+
 
 pub struct GameState {
     position: Position,
@@ -12,18 +13,17 @@ pub struct GameState {
 
 impl GameState {
     pub fn new() -> Self {
-        GameState::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap()
+        GameState::try_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap()
     }
 
-    pub fn from_fen(fen: &str) -> Result<Self, &str> {
-        let mut board = Board::new();
+    pub fn try_from_fen(fen: &str) -> Result<Self, &str> {
         let mut fen_pieces = fen.split_whitespace();
 
         let piece_placement = match fen_pieces.next() {
             Some(s) => s,
             _ => return Err("Empty string.")
         };
-
+        let mut board = [Square::new_empty(); 64];
         let mut square_index: usize = 0;
         for char in piece_placement.chars() {
             if !char.is_ascii_alphabetic() {
@@ -57,9 +57,7 @@ impl GameState {
                 false => Color::Black
             };
 
-            board[Coordinate::try_from(square_index).unwrap()].set_piece(
-                Piece { piece_type, color }
-                );
+            board[square_index].set_piece(Piece { piece_type, color });
 
             square_index += 1;
         }
@@ -100,7 +98,7 @@ impl GameState {
             None => return Err("Incomplete FEN.")
         };
         if let Some(coord) = en_passant_square {
-            board[coord].set_en_passant();
+            board[usize::from(coord)].set_en_passant();
         };
 
         let plies_since_last_capture_or_pawn_advance: u8 = match fen_pieces.next() {
@@ -115,7 +113,7 @@ impl GameState {
 
         Ok(
             GameState {
-                position: Position::new(board, active_color, castling_rights),
+                position: Position{ board, active_color, castling_rights },
                 current_move_number: moves_played,
                 num_plies_since_last_capture_or_pawn_advance: plies_since_last_capture_or_pawn_advance
             }
@@ -126,5 +124,105 @@ impl GameState {
         self.position.print();
         println!("Current move number: {}", self.current_move_number);
         println!("Plies since last capture/pawn move: {}", self.num_plies_since_last_capture_or_pawn_advance);
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::{GameState, Piece, PieceType, Color};
+
+    #[test]
+    fn instantiate_starting_game_state() {
+        let gamestate = GameState::new();
+
+        assert_eq!(
+            gamestate.position.board[0].get_piece(),
+            Some(Piece{ piece_type: PieceType::Rook, color: Color::Black })
+        );
+        assert_eq!(
+            gamestate.position.board[49].get_piece(),
+            Some(Piece{ piece_type: PieceType::Pawn, color: Color::White })
+        );
+        assert_eq!(
+            gamestate.position.board[6].get_piece(),
+            Some(Piece { piece_type: PieceType::Knight, color: Color::Black })
+        );
+        assert_eq!(
+            gamestate.position.board[61].get_piece(),
+            Some(Piece { piece_type: PieceType::Bishop, color: Color::White })
+        );
+        assert_eq!(
+            gamestate.position.board[3].get_piece(),
+            Some(Piece { piece_type: PieceType::Queen, color: Color::Black })
+        );
+        assert_eq!(
+            gamestate.position.board[25].get_piece(),
+            None
+        );
+
+        assert_eq!(gamestate.position.active_color, Color::White);
+
+        assert!(gamestate.position.castling_rights[Color::White].kingside);
+        assert!(gamestate.position.castling_rights[Color::White].queenside);
+        assert!(gamestate.position.castling_rights[Color::Black].kingside);
+        assert!(gamestate.position.castling_rights[Color::Black].queenside);
+
+        assert_eq!(gamestate.current_move_number, 1);
+
+        assert_eq!(gamestate.num_plies_since_last_capture_or_pawn_advance, 0);
+    }
+
+
+    #[test]
+    fn read_arbitrary_fen() {
+        let gamestate = match GameState::try_from_fen("4rk2/PR4pp/2R2p2/8/1P6/7P/5BK1/8 b - - 0 43") {
+            Ok(gs) => gs,
+            Err(msg) => panic!("{msg}")
+        };
+
+        assert_eq!(
+            gamestate.position.board[4].get_piece(),
+            Some(Piece{ piece_type: PieceType::Rook, color: Color::Black })
+        );
+        assert_eq!(
+            gamestate.position.board[5].get_piece(),
+            Some(Piece{ piece_type: PieceType::King, color: Color::Black })
+        );
+        assert_eq!(
+            gamestate.position.board[31].get_piece(),
+            None
+        );
+        assert_eq!(
+            gamestate.position.board[33].get_piece(),
+            Some(Piece{ piece_type: PieceType::Pawn, color: Color::White })
+        );
+
+        assert_eq!(gamestate.position.active_color, Color::Black);
+
+        assert!(!gamestate.position.castling_rights[Color::White].kingside);
+        assert!(!gamestate.position.castling_rights[Color::White].queenside);
+        assert!(!gamestate.position.castling_rights[Color::Black].kingside);
+        assert!(!gamestate.position.castling_rights[Color::Black].queenside);
+
+        assert_eq!(gamestate.current_move_number, 43);
+
+        assert_eq!(gamestate.num_plies_since_last_capture_or_pawn_advance, 0);
+    }
+
+    #[test]
+    fn try_from_empty_fen() {
+        match GameState::try_from_fen("") {
+            Err(msg) => assert_eq!(msg, "Empty string."),
+            Ok(_) => panic!("GameState from empty FEN did not return Err.")
+        }
+    }
+
+    #[test]
+    fn try_from_fen_with_bad_piece_placements() {
+        match GameState::try_from_fen("foobarbaz w - - 5 7") {
+            Err(msg) => assert_eq!(msg, "Malformed piece placements."),
+            Ok(_) => panic!("GameState from FEN with bad piece placements did not return Err.")
+        }
     }
 }

@@ -1,7 +1,7 @@
 use std::fmt;
 
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Color {
     White,
     Black

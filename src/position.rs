@@ -1,30 +1,22 @@
-use crate::board::Board;
+use crate::board::Square;
 use crate::color::Color;
 use crate::castling_rights::CastlingRights;
 use std::io::{self, Write};
 
 
 pub struct Position {
-    board: Board,
-    active_color: Color,
-    castling_rights: CastlingRights
+    pub board: [Square; 64],
+    pub active_color: Color,
+    pub castling_rights: CastlingRights
 }
 
 impl Position {
-    pub fn new(board: Board, active_color: Color, castling_rights: CastlingRights) -> Self {
-        Position {
-            board,
-            active_color,
-            castling_rights
-        }
-    }
-
     pub fn print(&self) {
         let mut col_counter = 0;
 
         print!("+---+---+---+---+---+---+---+---+\n");
 
-        for square in self.board.iter_squares() {
+        for square in self.board.iter() {
             print!("| {} ", square);
 
             col_counter += 1;

@@ -1,37 +1,6 @@
 use crate::color::Color;
 use crate::piece::{Piece, PieceType};
 use std::fmt;
-use std::ops::{Index, IndexMut};
-
-
-#[derive(Copy, Clone)]
-pub struct Board {
-    squares: [Square; 64]
-}
-
-impl Board {
-    pub fn new() -> Self {
-        Board { squares: [Square::new_empty(); 64] }
-    }
-
-    pub fn iter_squares(&self) -> std::slice::Iter<Square> {
-        self.squares.iter()
-    }
-}
-
-impl Index<Coordinate> for Board {
-    type Output = Square;
-
-    fn index(&self, index: Coordinate) -> &Self::Output {
-        &self.squares[usize::from(index)]
-    }
-}
-
-impl IndexMut<Coordinate> for Board {
-    fn index_mut(&mut self, index: Coordinate) -> &mut Self::Output {
-        &mut self.squares[usize::from(index)]
-    }
-}
 
 
 pub struct Coordinate {
@@ -101,41 +70,45 @@ impl TryFrom<usize> for Coordinate {
 }
 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Square {
-    occupied_by: Option<Piece>,
-    en_passant_square: bool
+    piece: Option<Piece>,
+    is_en_passant_square: bool
 }
 
 impl Square {
-    fn new_empty() -> Self {
-        Square { occupied_by: None, en_passant_square: false }
+    pub fn new_empty() -> Self {
+        Square { piece: None, is_en_passant_square: false }
+    }
+
+    pub fn get_piece(&self) -> Option<Piece> {
+        self.piece
     }
 
     pub fn set_piece(&mut self, piece: Piece) {
-        self.occupied_by = Some(piece);
+        self.piece = Some(piece);
     }
 
     pub fn clear_piece(&mut self) {
-        self.occupied_by = None;
+        self.piece = None;
     }
 
     pub fn set_en_passant(&mut self) {
-        self.en_passant_square = true;
+        self.is_en_passant_square = true;
     }
 }
 
 impl fmt::Display for Square {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-         if self.occupied_by.is_none() {
-            if self.en_passant_square {
+         if self.piece.is_none() {
+            if self.is_en_passant_square {
                 return write!(f, "*")
             } else {
                 return write!(f, " ")
             }
         }
 
-        let piece = self.occupied_by.unwrap();
+        let piece = self.piece.unwrap();
         let letter = match piece.get_type() {
             PieceType::Pawn => 'P',
             PieceType::King => 'K',

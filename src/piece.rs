@@ -1,7 +1,7 @@
 use crate::color::Color;
 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Piece {
     pub piece_type: PieceType,
     pub color: Color
@@ -18,7 +18,7 @@ impl Piece {
 }
 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum PieceType {
     Pawn,
     King,
