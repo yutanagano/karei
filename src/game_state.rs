@@ -21,7 +21,7 @@ impl GameState {
 
         let piece_placement = match fen_pieces.next() {
             Some(s) => s,
-            _ => return Err("Empty string.")
+            None => return Err("Empty string.")
         };
         let mut board = [Square::new_empty(); 64];
         let mut square_index: usize = 0;
@@ -71,12 +71,12 @@ impl GameState {
                 "b" => Color::Black,
                 _ => return Err("Malformed active color.")
             },
-            _ => return Err("Incomplete FEN.")
+            None => return Err("Incomplete FEN.")
         };
 
         let castling_info_string = match fen_pieces.next() {
             Some(s) => s,
-            _ => return Err("Incomplete FEN.")
+            None => return Err("Incomplete FEN.")
         };
         let mut castling_rights = CastlingRights::new_assuming_all_false();
         for char in castling_info_string.chars() {
@@ -93,22 +93,33 @@ impl GameState {
         let en_passant_square = match fen_pieces.next() {
             Some(s) => match s {
                 "-" => None,
-                coords => Some(Coordinate::try_from(coords).unwrap())
+                coords => Some(Coordinate::try_from(coords))
             },
             None => return Err("Incomplete FEN.")
         };
-        if let Some(coord) = en_passant_square {
-            board[usize::from(coord)].set_en_passant();
+        if let Some(coord_result) = en_passant_square {
+            match coord_result {
+                Ok(coord) => board[usize::from(coord)].set_en_passant(),
+                Err(_) => return Err("Malformed en passant square.")
+            }
         };
 
-        let plies_since_last_capture_or_pawn_advance: u8 = match fen_pieces.next() {
-            Some(s) => s.parse().unwrap(),
+        let ply_count_result = match fen_pieces.next() {
+            Some(s) => s.parse::<u8>(),
             None => return Err("Incomplete FEN.")
         };
+        let plies_since_last_capture_or_pawn_advance = match ply_count_result {
+            Ok(v) => v,
+            Err(_) => return Err("Malformed ply count.")
+        };
 
-        let moves_played: u8 = match fen_pieces.next() {
-            Some(s) => s.parse().unwrap(),
+        let moves_played_result = match fen_pieces.next() {
+            Some(s) => s.parse::<u8>(),
             None => return Err("Incomplete FEN.")
+        };
+        let moves_played = match moves_played_result {
+            Ok(v) => v,
+            Err(_) => return Err("Malformed move count.")
         };
 
         Ok(
