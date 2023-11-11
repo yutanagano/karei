@@ -73,12 +73,14 @@ impl TryFrom<usize> for Coordinate {
 #[derive(Copy, Clone, Debug)]
 pub struct Square {
     piece: Option<Piece>,
-    is_en_passant_square: bool
+    is_en_passant_square: bool,
+    is_attacked_by_white: bool,
+    is_attacked_by_black: bool
 }
 
 impl Square {
     pub fn new_empty() -> Self {
-        Square { piece: None, is_en_passant_square: false }
+        Square { piece: None, is_en_passant_square: false, is_attacked_by_white: false, is_attacked_by_black: false }
     }
 
     pub fn get_piece(&self) -> Option<Piece> {
@@ -95,6 +97,17 @@ impl Square {
 
     pub fn set_en_passant(&mut self) {
         self.is_en_passant_square = true;
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.piece == None
+    }
+
+    pub fn is_attacked_by(&self, color: Color) -> bool {
+        match color {
+            Color::White => self.is_attacked_by_white,
+            Color::Black => self.is_attacked_by_black
+        }
     }
 }
 
