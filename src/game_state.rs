@@ -124,7 +124,7 @@ impl GameState {
 
         Ok(
             GameState {
-                position: Position{ board, active_color, castling_rights },
+                position: Position::new(board, active_color, castling_rights),
                 current_move_number: moves_played,
                 num_plies_since_last_capture_or_pawn_advance: plies_since_last_capture_or_pawn_advance
             }
@@ -141,6 +141,8 @@ impl GameState {
 
 #[cfg(test)]
 mod tests {
+    use crate::board::Coordinate;
+
     use super::{GameState, Piece, PieceType, Color};
 
     #[test]
@@ -148,27 +150,27 @@ mod tests {
         let gamestate = GameState::new();
 
         assert_eq!(
-            gamestate.position.board[0].get_piece(),
+            gamestate.position[Coordinate::A8].get_piece(),
             Some(Piece{ piece_type: PieceType::Rook, color: Color::Black })
         );
         assert_eq!(
-            gamestate.position.board[49].get_piece(),
+            gamestate.position[Coordinate::B2].get_piece(),
             Some(Piece{ piece_type: PieceType::Pawn, color: Color::White })
         );
         assert_eq!(
-            gamestate.position.board[6].get_piece(),
+            gamestate.position[Coordinate::G8].get_piece(),
             Some(Piece { piece_type: PieceType::Knight, color: Color::Black })
         );
         assert_eq!(
-            gamestate.position.board[61].get_piece(),
+            gamestate.position[Coordinate::F1].get_piece(),
             Some(Piece { piece_type: PieceType::Bishop, color: Color::White })
         );
         assert_eq!(
-            gamestate.position.board[3].get_piece(),
+            gamestate.position[Coordinate::D8].get_piece(),
             Some(Piece { piece_type: PieceType::Queen, color: Color::Black })
         );
         assert_eq!(
-            gamestate.position.board[25].get_piece(),
+            gamestate.position[Coordinate::E4].get_piece(),
             None
         );
 
@@ -193,19 +195,19 @@ mod tests {
         };
 
         assert_eq!(
-            gamestate.position.board[4].get_piece(),
+            gamestate.position[Coordinate::E8].get_piece(),
             Some(Piece{ piece_type: PieceType::Rook, color: Color::Black })
         );
         assert_eq!(
-            gamestate.position.board[5].get_piece(),
+            gamestate.position[Coordinate::F8].get_piece(),
             Some(Piece{ piece_type: PieceType::King, color: Color::Black })
         );
         assert_eq!(
-            gamestate.position.board[31].get_piece(),
+            gamestate.position[Coordinate::H5].get_piece(),
             None
         );
         assert_eq!(
-            gamestate.position.board[33].get_piece(),
+            gamestate.position[Coordinate::B4].get_piece(),
             Some(Piece{ piece_type: PieceType::Pawn, color: Color::White })
         );
 

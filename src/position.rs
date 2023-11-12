@@ -1,17 +1,23 @@
-use crate::{board::Square, piece::PieceType};
+use crate::board::{Coordinate, Square};
+use crate::piece::PieceType;
 use crate::chess_move::ChessMove;
 use crate::color::Color;
 use crate::castling_rights::CastlingRights;
 use std::io::{self, Write};
+use std::ops::{Index, IndexMut};
 
 
 pub struct Position {
-    pub board: [Square; 64],
+    board: [Square; 64],
     pub active_color: Color,
     pub castling_rights: CastlingRights
 }
 
 impl Position {
+    pub fn new(board: [Square; 64], active_color: Color, castling_rights: CastlingRights) -> Self {
+        Position { board, active_color, castling_rights }
+    }
+
     pub fn get_possible_moves(&self) -> Vec<ChessMove> {
         let mut moves = Vec::new();
 
@@ -125,5 +131,19 @@ impl Position {
         println!("{} to move.", self.active_color);
         println!("White castling rights: {}.", self.castling_rights[Color::White]);
         println!("Black castling rights: {}.", self.castling_rights[Color::Black]);
+    }
+}
+
+impl Index<Coordinate> for Position {
+    type Output = Square;
+
+    fn index(&self, index: Coordinate) -> &Self::Output {
+        &self.board[index as usize]
+    }
+}
+
+impl IndexMut<Coordinate> for Position {
+    fn index_mut(&mut self, index: Coordinate) -> &mut Self::Output {
+        &mut self.board[index as usize]
     }
 }
