@@ -9,8 +9,8 @@ use std::ops::{Index, IndexMut};
 
 pub struct Position {
     board: [Square; 64],
-    pub active_color: Color,
-    pub castling_rights: CastlingRights
+    active_color: Color,
+    castling_rights: CastlingRights
 }
 
 impl Position {
