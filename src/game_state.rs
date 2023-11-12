@@ -99,7 +99,7 @@ impl GameState {
         };
         if let Some(coord_result) = en_passant_square {
             match coord_result {
-                Ok(coord) => board[usize::from(coord)].set_en_passant(),
+                Ok(coord) => board[coord as usize].set_en_passant(),
                 Err(_) => return Err("Malformed en passant square.")
             }
         };

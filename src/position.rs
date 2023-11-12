@@ -1,4 +1,4 @@
-use crate::board::Square;
+use crate::{board::Square, piece::PieceType};
 use crate::chess_move::ChessMove;
 use crate::color::Color;
 use crate::castling_rights::CastlingRights;
@@ -22,6 +22,29 @@ impl Position {
         if self.current_player_can_castle_queenside() {
             moves.push(ChessMove::CastleQueenside)
         };
+        
+        for (index, square) in self.board.iter().enumerate() {
+            if square.is_empty() {
+                continue;
+            };
+
+            let piece = square.get_piece().unwrap();
+
+            if piece.color == self.active_color.get_opposite() {
+                continue;
+            };
+
+            let pseudo_legal_moves = match piece.piece_type {
+                PieceType::Pawn => self.get_possible_pawn_moves(index),
+                PieceType::King => self.get_possible_king_moves(index),
+                PieceType::Queen => self.get_possible_queen_moves(index),
+                PieceType::Bishop => self.get_possible_bishop_moves(index),
+                PieceType::Knight => self.get_possible_knight_moves(index),
+                PieceType::Rook => self.get_possible_rook_moves(index)
+            };
+
+            moves.extend(pseudo_legal_moves);
+        }
 
         moves
     }
@@ -38,7 +61,7 @@ impl Position {
 
         key_squares.iter().fold(
             true,
-            |acc, square| acc && square.is_empty() && square.is_attacked_by(self.active_color.get_opposite())
+            |acc, square| acc && square.is_empty() && !square.is_attacked_by(self.active_color.get_opposite())
         )
     }
 
@@ -54,8 +77,32 @@ impl Position {
 
         key_squares.iter().fold(
             true,
-            |acc, square| acc && square.is_empty() && square.is_attacked_by(self.active_color.get_opposite())
+            |acc, square| acc && square.is_empty() && !square.is_attacked_by(self.active_color.get_opposite())
         )
+    }
+
+    fn get_possible_pawn_moves(&self, from_square_index: usize) -> Vec<ChessMove> {
+        Vec::new()
+    }
+
+    fn get_possible_king_moves(&self, from_square_index: usize) -> Vec<ChessMove> {
+        Vec::new()
+    }
+
+    fn get_possible_queen_moves(&self, from_square_index: usize) -> Vec<ChessMove> {
+        Vec::new()
+    }
+
+    fn get_possible_bishop_moves(&self, from_square_index: usize) -> Vec<ChessMove> {
+        Vec::new()
+    }
+
+    fn get_possible_knight_moves(&self, from_square_index: usize) -> Vec<ChessMove> {
+        Vec::new()
+    }
+
+    fn get_possible_rook_moves(&self, from_square_index: usize) -> Vec<ChessMove> {
+        Vec::new()
     }
 
     pub fn print(&self) {
