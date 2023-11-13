@@ -11,6 +11,7 @@ pub enum ChessMove {
     },
     PawnPromotion{
         from: Coordinate,
+        to: Coordinate,
         promotion_to: PieceType
     },
     CastleKingside,

@@ -1,8 +1,10 @@
 use crate::color::Color;
 use crate::piece::{Piece, PieceType};
 use std::fmt;
+use std::ops::Add;
 
 
+#[derive(Clone, Copy)]
 pub enum Coordinate {
     A8, B8, C8, D8, E8, F8, G8, H8,
     A7, B7, C7, D7, E7, F7, G7, H7,
@@ -12,6 +14,36 @@ pub enum Coordinate {
     A3, B3, C3, D3, E3, F3, G3, H3,
     A2, B2, C2, D2, E2, F2, G2, H2,
     A1, B1, C1, D1, E1, F1, G1, H1
+}
+
+impl Coordinate {
+    pub fn get_rank(&self) -> Rank {
+        match *self as u8 {
+            (0..=7) => Rank::Eighth,
+            (8..=15) => Rank::Seventh,
+            (16..=23) => Rank::Sixth,
+            (24..=31) => Rank::Fifth,
+            (32..=39) => Rank::Fourth,
+            (40..=47) => Rank::Third,
+            (48..=55) => Rank::Second,
+            (56..=63) => Rank::First,
+            _ => panic!("Something went terribly wrong.")
+        }
+    }
+
+    pub fn get_file(&self) -> File {
+        match *self as u8 % 8 {
+            0 => File::A,
+            1 => File::B,
+            2 => File::C,
+            3 => File::D,
+            4 => File::E,
+            5 => File::F,
+            6 => File::G,
+            7 => File::H,
+            _ => panic!("Something went terribly wrong.")
+        }
+    }
 }
 
 impl TryFrom<&str> for Coordinate {
@@ -132,6 +164,72 @@ impl TryFrom<usize> for Coordinate {
     }
 }
 
+impl Add<Direction> for Coordinate {
+    type Output = Result<Self, &'static str>;
+
+    fn add(self, rhs: Direction) -> Self::Output {
+        let new_index = (self as i8) + (i8::from(rhs));
+        Coordinate::try_from(new_index as usize)
+    }
+}
+
+
+#[derive(PartialEq)]
+pub enum Rank {
+    First,
+    Second,
+    Third,
+    Fourth,
+    Fifth,
+    Sixth,
+    Seventh,
+    Eighth
+}
+
+
+#[derive(PartialEq)]
+pub enum File {
+    A, B, C, D, E, F, G, H
+}
+
+
+#[derive(Clone, Copy)]
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+    UpperLeft,
+    UpperRight,
+    LowerLeft,
+    LowerRight,
+    Compound(i8)
+}
+
+impl Add for Direction {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Direction::Compound(i8::from(self) + i8::from(rhs))
+    }
+}
+
+impl From<Direction> for i8 {
+    fn from(value: Direction) -> Self {
+        match value {
+            Direction::Up => -8,
+            Direction::Down => 8,
+            Direction::Left => -1,
+            Direction::Right => 1,
+            Direction::UpperLeft => -9,
+            Direction::UpperRight => -7,
+            Direction::LowerLeft => 7,
+            Direction::LowerRight => 9,
+            Direction::Compound(val) => val
+        }
+    }
+}
+
 
 #[derive(Copy, Clone, Debug)]
 pub struct Square {
@@ -148,6 +246,14 @@ impl Square {
 
     pub fn get_piece(&self) -> Option<Piece> {
         self.piece
+    }
+
+    pub fn has_piece_of_color(&self, color: Color) -> bool {
+        if let Some(piece) = self.piece {
+            piece.color == color
+        } else {
+            false
+        }
     }
 
     pub fn set_piece(&mut self, piece: Piece) {
