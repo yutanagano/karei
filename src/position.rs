@@ -3,6 +3,7 @@ use crate::piece::PieceType;
 use crate::chess_move::ChessMove;
 use crate::color::Color;
 use crate::castling_rights::CastlingRights;
+use std::io::{self, Write};
 
 
 pub struct Position {
@@ -154,24 +155,26 @@ impl Position {
     }
 
     pub fn print(&self) {
-//        let mut col_counter = 0;
-//
-//        print!("+---+---+---+---+---+---+---+---+\n");
-//
-//        for square in self.board.iter() {
-//            print!("| {} ", square);
-//
-//            col_counter += 1;
-//            col_counter = col_counter % 8;
-//
-//            if col_counter == 0 {
-//                print!("|\n+---+---+---+---+---+---+---+---+\n");
-//            }
-//        }
-//        io::stdout().flush().unwrap();
-//
-//        println!("{} to move.", self.active_color);
-//        println!("White castling rights: {}.", self.castling_rights[Color::White]);
-//        println!("Black castling rights: {}.", self.castling_rights[Color::Black]);
+        print!("+---+---+---+---+---+---+---+---+\n");
+
+        let ranks = [Rank::Eighth, Rank::Seventh, Rank::Sixth, Rank::Fifth, Rank::Fourth, Rank::Third, Rank::Second, Rank::First];
+        let files = [File::A, File::B, File::C, File::D, File::E, File::F, File::G, File::H];
+
+        for rank in ranks.into_iter() {
+            for file in files.into_iter() {
+                let coordiate = Coordinate::new(file, rank);
+                let square = self.board[coordiate];
+
+                print!("| {} ", square);
+            };
+
+            print!("|\n+---+---+---+---+---+---+---+---+\n");
+        };
+
+        io::stdout().flush().unwrap();
+
+        println!("{} to move.", self.active_color);
+        println!("White castling rights: {}.", self.castling_rights[Color::White]);
+        println!("Black castling rights: {}.", self.castling_rights[Color::Black]);
     }
 }
