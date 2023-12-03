@@ -33,13 +33,21 @@ impl IndexMut<Coordinate> for Board {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Coordinate {
-    pub file: File,
-    pub rank: Rank
+    file: File,
+    rank: Rank
 }
 
 impl Coordinate {
     pub fn new(file: File, rank: Rank) -> Self {
         Coordinate { file, rank }
+    }
+
+    pub fn get_file(&self) -> File {
+        return self.file;
+    }
+
+    pub fn get_rank(&self) -> Rank {
+        return self.rank;
     }
 
     pub fn try_moving(self, direction: Direction) -> Result<Self, BoardError> {

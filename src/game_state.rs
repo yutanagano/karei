@@ -167,7 +167,7 @@ impl GameState {
                     return Err(FenError::Malformed)
                 }
 
-                Some(Coordinate{ file, rank })
+                Some(Coordinate::new(file, rank))
             }
         };
 
