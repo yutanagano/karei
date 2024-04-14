@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -12,31 +13,33 @@ func uci(fromGUI chan string) {
 
 	quit, isInfinite := false, false
 
-	var command, bestMove, bestMoveCache string
-	var command_parts []string
+	var bestMoveCache string
+	var tokens []string
 
 	for !quit {
 		select {
-		case command = <-fromGUI:
-			command = strings.ToLower(command)
-			command_parts = strings.Split(command, " ")
-			switch command_parts[0] {
+		case input := <-fromGUI:
+			input = strings.ToLower(input)
+			tokens = strings.Split(input, " ")
+			command := popFromQueue(&tokens)
+
+			switch command {
 			case "uci":
 				handleUci()
 			case "setoption":
-				handleSetOption(command_parts)
+				handleSetOption(&tokens)
 			case "isready":
 				handleIsReady()
 			case "ucinewgame":
 				handleNewGame()
 			case "position":
-				handlePosition(command_parts)
+				handlePosition(&tokens)
 			case "debug":
-				handleDebug(command_parts)
+				handleDebug(&tokens)
 			case "register":
-				handleRegister(command_parts)
+				handleRegister(&tokens)
 			case "go":
-				handleGo(command_parts)
+				handleGo(&tokens)
 			case "ponderhit":
 				handlePonderHit()
 			case "stop":
@@ -45,7 +48,7 @@ func uci(fromGUI chan string) {
 				quit = true
 				continue
 			}
-		case bestMove = <-fromEngine:
+		case bestMove := <-fromEngine:
 			handleBestMove(bestMove, isInfinite, &bestMoveCache)
 			continue
 		}
@@ -60,8 +63,8 @@ func handleUci() {
 	tell("uciok")
 }
 
-func handleSetOption(command_parts []string) {
-	tell("info string set option ", strings.Join(command_parts, " "))
+func handleSetOption(tokens *[]string) {
+	tell("info string set option ", strings.Join(*tokens, " "))
 	tell("info string not implemented yet")
 }
 
@@ -73,36 +76,81 @@ func handleNewGame() {
 	tell("info string ucinewgame not implemented")
 }
 
-func handlePosition(command_parts []string) {
-	// position [fen <fenstring> | startpos] (moves <move1> ... <movei>)?
-	if len(command_parts) > 1 {
-		switch command_parts[1] {
-		case "startpos":
-			tell("info string position startpos not implemented")
-		case "fen":
-			tell("info string position fen not implemented")
-		default:
-			tell("info string position ", command_parts[1], " not implemented")
+func handlePosition(tokens *[]string) {
+	// [fen <fenstring> | startpos] (moves <move1> ... <movei>)?
+	var positionFen Fen
+
+	position_specifier := popFromQueue(tokens)
+
+	switch position_specifier {
+	case "fen":
+		boardState := popFromQueue(tokens)
+		activeColor := popFromQueue(tokens)
+		castlingRights := popFromQueue(tokens)
+		enPassantSquare := popFromQueue(tokens)
+		halfMoveClock := popFromQueue(tokens)
+		fullMoveNumber := popFromQueue(tokens)
+
+		halfMoveClockInt, err := strconv.Atoi(halfMoveClock)
+		if err != nil {
+			tell("info string Bad FEN HalfMoveClock: ", err.Error())
+			return
 		}
-	} else {
-		tell("info string position not implemented")
+		fullMoveNumberInt, err := strconv.Atoi(fullMoveNumber)
+		if err != nil {
+			tell("info string Bad FEN FullMoveNumber: ", err.Error())
+			return
+		}
+
+		positionFen = Fen{
+			boardState,
+			activeColor,
+			castlingRights,
+			enPassantSquare,
+			halfMoveClockInt,
+			fullMoveNumberInt,
+		}
+
+	case "startpos":
+		positionFen = Fen{
+			BoardState:      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
+			ActiveColor:     "w",
+			CastlingRights:  "KQkq",
+			EnPassantSquare: "-",
+			HalfMoveClock:   0,
+			FullMoveNumber:  1,
+		}
+
+	default:
+		err := fmt.Errorf("expected position specifier to be 'fen' or 'startpos', got %s", position_specifier)
+		tell("info string ", err.Error())
+		return
+	}
+
+	tell("info string parsing FEN: ", positionFen.ToString())
+	parseFen(positionFen)
+
+	nextToken := popFromQueue(tokens)
+	if nextToken == "moves" {
+		tell("info string parsing moves: ", strings.Join(*tokens, " "))
+		parseMoves(tokens)
 	}
 }
 
-func handleDebug(command_parts []string) {
+func handleDebug(tokens *[]string) {
 	// debug [ on | off ]
 	tell("info string debug not implemented")
 }
 
-func handleRegister(command_parts []string) {
+func handleRegister(tokens *[]string) {
 	// register [ later | name <x> code <y> ]
 	tell("info string register not implemented")
 }
 
-func handleGo(command_parts []string) {
+func handleGo(tokens *[]string) {
 	// go (searchmoves <move1> ... <movei>)? ponder? (wtime <x>)? (btime <x>)? (winc <x>)? (binc <x>)? (movestogo <x>)? (depth <x>)? (nodes <x>)? (mate <x>)? (movetime <x>)? infinite?
-	if len(command_parts) > 1 {
-		switch command_parts[1] {
+	if len(*tokens) > 1 {
+		switch (*tokens)[1] {
 		case "searchmoves":
 			tell("info string go searchmoves not implemented")
 		case "ponder":
@@ -128,7 +176,7 @@ func handleGo(command_parts []string) {
 		case "infinite":
 			tell("info string go infinite not implemented")
 		default:
-			tell("info string go ", command_parts[1], " not implemented")
+			tell("info string go ", (*tokens)[1], " not implemented")
 		}
 	} else {
 		tell("info string go not implemented")
@@ -157,4 +205,13 @@ func handleBestMove(bestMove string, isInfinite bool, bestMoveCache *string) {
 		return
 	}
 	tell(bestMove)
+}
+
+func popFromQueue(queue *[]string) string {
+	if len(*queue) == 0 {
+		return ""
+	}
+	result := (*queue)[0]
+	*queue = (*queue)[1:]
+	return result
 }
