@@ -7,7 +7,7 @@ import (
 )
 
 func uci(fromGUI chan string) {
-	fmt.Println("info string Hello from uci")
+	tell("info string hello from uci")
 
 	fromEngine, toEngine := startEngine()
 
@@ -15,6 +15,8 @@ func uci(fromGUI chan string) {
 
 	var bestMoveCache string
 	var tokens []string
+
+	tell("info string listening")
 
 	for !quit {
 		select {

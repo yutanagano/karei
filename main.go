@@ -11,8 +11,9 @@ import (
 var tell = stdoutTell
 
 func main() {
-	tell("info string Hello from Karei")
+	tell("info string hello from karei")
 	uci(startStdinReader())
+	tell("info string goodbye!")
 }
 
 func stdoutTell(text ...string) {
