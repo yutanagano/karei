@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -80,47 +79,29 @@ func handleNewGame() {
 
 func handlePosition(tokens *[]string) {
 	// [fen <fenstring> | startpos] (moves <move1> ... <movei>)?
-	var positionFen Fen
+	var positionFen fen
 
 	position_specifier := popFromQueue(tokens)
 
 	switch position_specifier {
 	case "fen":
-		boardState := popFromQueue(tokens)
-		activeColor := popFromQueue(tokens)
-		castlingRights := popFromQueue(tokens)
-		enPassantSquare := popFromQueue(tokens)
-		halfMoveClock := popFromQueue(tokens)
-		fullMoveNumber := popFromQueue(tokens)
-
-		halfMoveClockInt, err := strconv.Atoi(halfMoveClock)
-		if err != nil {
-			tell("info string Bad FEN HalfMoveClock: ", err.Error())
-			return
-		}
-		fullMoveNumberInt, err := strconv.Atoi(fullMoveNumber)
-		if err != nil {
-			tell("info string Bad FEN FullMoveNumber: ", err.Error())
-			return
-		}
-
-		positionFen = Fen{
-			boardState,
-			activeColor,
-			castlingRights,
-			enPassantSquare,
-			halfMoveClockInt,
-			fullMoveNumberInt,
+		positionFen = fen{
+			boardState:      popFromQueue(tokens),
+			activeColour:    popFromQueue(tokens),
+			castlingRights:  popFromQueue(tokens),
+			enPassantSquare: popFromQueue(tokens),
+			halfMoveClock:   popFromQueue(tokens),
+			fullMoveNumber:  popFromQueue(tokens),
 		}
 
 	case "startpos":
-		positionFen = Fen{
-			BoardState:      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
-			ActiveColor:     "w",
-			CastlingRights:  "KQkq",
-			EnPassantSquare: "-",
-			HalfMoveClock:   0,
-			FullMoveNumber:  1,
+		positionFen = fen{
+			boardState:      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
+			activeColour:    "w",
+			castlingRights:  "KQkq",
+			enPassantSquare: "-",
+			halfMoveClock:   "0",
+			fullMoveNumber:  "1",
 		}
 
 	default:
@@ -129,8 +110,8 @@ func handlePosition(tokens *[]string) {
 		return
 	}
 
-	tell("info string parsing FEN: ", positionFen.ToString())
-	parseFen(positionFen)
+	tell("info string parsing FEN: ", positionFen.toString())
+	// p = positionFen.toPosition()
 
 	nextToken := popFromQueue(tokens)
 	if nextToken == "moves" {
