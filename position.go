@@ -136,6 +136,7 @@ type position struct {
 	castlingRights  castlingRights
 	activeColour    colour
 	pieceCounter    [12]int
+	halfMoveClock   int
 }
 
 func (p position) pieceMask() bitBoard {
