@@ -1,77 +1,14 @@
 package main
 
-type bitBoard uint64
+import (
+	"fmt"
+	"strconv"
+)
+
 type colour uint8
 type castlingRights uint8
 type pieceType uint8
 type squareState uint8
-
-const (
-	a1 = iota
-	b1
-	c1
-	d1
-	e1
-	f1
-	g1
-	h1
-	a2
-	b2
-	c2
-	d2
-	e2
-	f2
-	g2
-	h2
-	a3
-	b3
-	c3
-	d3
-	e3
-	f3
-	g3
-	h3
-	a4
-	b4
-	c4
-	d4
-	e4
-	f4
-	g4
-	h4
-	a5
-	b5
-	c5
-	d5
-	e5
-	f5
-	g5
-	h5
-	a6
-	b6
-	c6
-	d6
-	e6
-	f6
-	g6
-	h6
-	a7
-	b7
-	c7
-	d7
-	e7
-	f7
-	g7
-	h7
-	a8
-	b8
-	c8
-	d8
-	e8
-	f8
-	g8
-	h8
-)
 
 const (
 	white colour = 0
@@ -123,15 +60,11 @@ func (f fen) toString() string {
 	return f.boardState + " " + f.activeColour + " " + f.castlingRights + " " + f.enPassantSquare + " " + f.halfMoveClock + " " + f.fullMoveNumber
 }
 
-func (f fen) toPosition() {
-	// TODO: Return position struct from FEN
-}
-
 type position struct {
 	board           [64]squareState
 	colorMasks      [2]bitBoard
 	typeMasks       [6]bitBoard
-	kingSquares     [2]int
+	kingSquares     [2]coordinate
 	enPassantSquare int
 	castlingRights  castlingRights
 	activeColour    colour
@@ -166,9 +99,85 @@ func (p *position) clear() {
 	}
 }
 
+func (p *position) loadFEN(f fen) error {
+	p.clear()
+
+	currentRow, currentColumn := 7, 0
+	for _, currentRune := range f.boardState {
+		if currentColumn > 8 {
+			err := fmt.Errorf("Bad FEN: overfilled row during board specification.")
+			return err
+		}
+
+		if currentRune == '/' {
+			if currentColumn != 8 {
+				err := fmt.Errorf("Bad FEN: underfilled row during board specification.")
+				return err
+			}
+
+			currentRow--
+			currentColumn = 0
+			continue
+		}
+
+		if numEmptySquares, err := strconv.Atoi(string(currentRune)); err != nil {
+			currentColumn += numEmptySquares
+			continue
+		}
+
+		currentCoordinate := coordinateFromRowColumn(currentRow, currentColumn)
+		currentSquareState, err := squareStateFromRune(currentRune)
+
+		if err != nil {
+			err = fmt.Errorf("Bad FEN: %s", err.Error())
+			return err
+		}
+
+		p.setSquare(currentSquareState, currentCoordinate)
+	}
+
+	return nil
+}
+
+func (p *position) setSquare(state squareState, coord coordinate) {
+	// TODO: set a square to be some piece
+}
+
 func (p *position) newGame() {
 	p.clear()
 	// TODO: set up starting position
+}
+
+func squareStateFromRune(char rune) (squareState, error) {
+	switch char {
+	case 'K':
+		return whiteKing, nil
+	case 'Q':
+		return whiteQueen, nil
+	case 'R':
+		return whiteRook, nil
+	case 'B':
+		return whiteBishop, nil
+	case 'N':
+		return whiteKnight, nil
+	case 'P':
+		return whitePawn, nil
+	case 'k':
+		return blackKing, nil
+	case 'q':
+		return blackQueen, nil
+	case 'r':
+		return blackRook, nil
+	case 'b':
+		return blackBishop, nil
+	case 'n':
+		return blackKnight, nil
+	case 'p':
+		return blackPawn, nil
+	default:
+		err := fmt.Errorf("Unrecognized piece: %c", char)
+		return empty, err
+	}
 }
 
 func parseMoves(tokens *[]string) {
