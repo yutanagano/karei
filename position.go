@@ -61,31 +61,31 @@ func (f fen) toString() string {
 }
 
 type position struct {
-	board           [64]squareState
-	colorMasks      [2]bitBoard
-	typeMasks       [6]bitBoard
-	kingSquares     [2]coordinate
-	enPassantSquare int
-	castlingRights  castlingRights
-	activeColour    colour
-	pieceCounter    [12]int
-	halfMoveClock   int
+	board            [64]squareState
+	colourMasks      [2]bitBoard
+	pieceTypeMasks   [6]bitBoard
+	kingSquares      [2]coordinate
+	enPassantSquare  int
+	castlingRights   castlingRights
+	activeColour     colour
+	pieceTypeCounter [12]int
+	halfMoveClock    int
 }
 
-func (p position) pieceMask() bitBoard {
-	return p.colorMasks[white] | p.colorMasks[black]
+func (p position) occupiedMask() bitBoard {
+	return p.colourMasks[white] | p.colourMasks[black]
 }
 
 func (p *position) clear() {
-	for coordinate := a1; coordinate <= h8; coordinate++ {
-		p.board[coordinate] = empty
+	for theCoord := a1; theCoord <= h8; theCoord++ {
+		p.board[theCoord] = empty
 	}
 
-	p.colorMasks[white] = 0
-	p.colorMasks[black] = 0
+	p.colourMasks[white] = 0
+	p.colourMasks[black] = 0
 
-	for piece := king; piece <= pawn; piece++ {
-		p.typeMasks[piece] = 0
+	for thePieceType := king; thePieceType <= pawn; thePieceType++ {
+		p.pieceTypeMasks[thePieceType] = 0
 	}
 
 	p.kingSquares[white] = e1
@@ -94,8 +94,8 @@ func (p *position) clear() {
 	p.enPassantSquare = -1
 	p.castlingRights = whiteCastleKingSide | whiteCastleQueenSide | blackCastleKingSide | blackCastleQueenSide
 	p.activeColour = white
-	for piece := whiteKing; piece <= blackPawn; piece++ {
-		p.pieceCounter[piece] = 0
+	for thePiece := whiteKing; thePiece <= blackPawn; thePiece++ {
+		p.pieceTypeCounter[thePiece] = 0
 	}
 }
 
@@ -140,7 +140,27 @@ func (p *position) loadFEN(f fen) error {
 }
 
 func (p *position) setSquare(state squareState, coord coordinate) {
-	// TODO: set a square to be some piece
+	p.board[coord] = state
+
+	if state == empty {
+		p.colourMasks[white].clear(coord)
+		p.colourMasks[black].clear(coord)
+
+		for thePieceType := king; thePieceType <= pawn; thePieceType++ {
+			p.pieceTypeMasks[thePieceType].clear(coord)
+		}
+		return
+	}
+
+	thePieceType := state.getPieceType()
+	theColour := state.getColour()
+
+	if thePieceType == king {
+		p.kingSquares[theColour] = coord
+	}
+
+	p.colourMasks[theColour].set(coord)
+	p.pieceTypeMasks[thePieceType].set(coord)
 }
 
 func (p *position) newGame() {
@@ -178,6 +198,30 @@ func squareStateFromRune(char rune) (squareState, error) {
 		err := fmt.Errorf("Unrecognized piece: %c", char)
 		return empty, err
 	}
+}
+
+func (s squareState) getPieceType() pieceType {
+	switch s / 6 {
+	case 0:
+		return king
+	case 1:
+		return queen
+	case 2:
+		return rook
+	case 3:
+		return bishop
+	case 4:
+		return knight
+	default:
+		return pawn
+	}
+}
+
+func (s squareState) getColour() colour {
+	if s%2 == 0 {
+		return white
+	}
+	return black
 }
 
 func parseMoves(tokens *[]string) {
