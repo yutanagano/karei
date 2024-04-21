@@ -61,58 +61,31 @@ func (f fen) toString() string {
 }
 
 type position struct {
-	board            [64]squareState
-	colourMasks      [2]bitBoard
-	pieceTypeMasks   [6]bitBoard
-	kingSquares      [2]coordinate
-	enPassantSquare  int
-	castlingRights   castlingRights
-	activeColour     colour
-	pieceTypeCounter [12]int
-	halfMoveClock    int
+	board                  [64]squareState
+	colourMasks            [2]bitBoard
+	pieceTypeMasks         [6]bitBoard
+	kingSquares            [2]coordinate
+	enPassantSquare        coordinate
+	castlingRights         castlingRights
+	activeColour           colour
+	pieceColourTypeCounter [12]int
+	halfMoveClock          int
 }
 
 func (p position) occupiedMask() bitBoard {
 	return p.colourMasks[white] | p.colourMasks[black]
 }
 
-func (p *position) clear() {
-	for theCoord := a1; theCoord <= h8; theCoord++ {
-		p.board[theCoord] = empty
-	}
-
-	p.colourMasks[white] = 0
-	p.colourMasks[black] = 0
-
-	for thePieceType := king; thePieceType <= pawn; thePieceType++ {
-		p.pieceTypeMasks[thePieceType] = 0
-	}
-
-	p.kingSquares[white] = e1
-	p.kingSquares[black] = e8
-
-	p.enPassantSquare = -1
-	p.castlingRights = whiteCastleKingSide | whiteCastleQueenSide | blackCastleKingSide | blackCastleQueenSide
-	p.activeColour = white
-	for thePiece := whiteKing; thePiece <= blackPawn; thePiece++ {
-		p.pieceTypeCounter[thePiece] = 0
-	}
-}
-
 func (p *position) loadFEN(f fen) error {
-	p.clear()
-
 	currentRow, currentColumn := 7, 0
 	for _, currentRune := range f.boardState {
 		if currentColumn > 8 {
-			err := fmt.Errorf("Bad FEN: overfilled row during board specification.")
-			return err
+			return fmt.Errorf("Bad FEN: overfilled row during board specification.")
 		}
 
 		if currentRune == '/' {
 			if currentColumn != 8 {
-				err := fmt.Errorf("Bad FEN: underfilled row during board specification.")
-				return err
+				return fmt.Errorf("Bad FEN: underfilled row during board specification.")
 			}
 
 			currentRow--
@@ -129,12 +102,64 @@ func (p *position) loadFEN(f fen) error {
 		currentSquareState, err := squareStateFromRune(currentRune)
 
 		if err != nil {
-			err = fmt.Errorf("Bad FEN: %s", err.Error())
-			return err
+			return fmt.Errorf("Bad FEN: %s", err.Error())
 		}
 
 		p.setSquare(currentSquareState, currentCoordinate)
 	}
+
+	switch f.activeColour {
+	case "w":
+		p.activeColour = white
+	case "b":
+		p.activeColour = black
+	default:
+		return fmt.Errorf("Bad FEN: unrecognised colour %s", f.activeColour)
+	}
+
+	p.castlingRights = 0
+	switch f.castlingRights {
+	case "-":
+		break
+	default:
+		for _, theRune := range f.castlingRights {
+			if theRune == 'K' {
+				p.castlingRights |= whiteCastleKingSide
+				continue
+			}
+			if theRune == 'Q' {
+				p.castlingRights |= whiteCastleQueenSide
+				continue
+			}
+			if theRune == 'k' {
+				p.castlingRights |= blackCastleKingSide
+				continue
+			}
+			if theRune == 'q' {
+				p.castlingRights |= blackCastleQueenSide
+				continue
+			}
+
+			return fmt.Errorf("Bad FEN: unrecognised character in castling rights specification: %c", theRune)
+		}
+	}
+
+	switch f.enPassantSquare {
+	case "-":
+		p.enPassantSquare = nullCoordinate
+	default:
+		eps, err := coordinateFromString(f.enPassantSquare)
+		if err != nil {
+			return fmt.Errorf("Bad FEN: %s", err.Error())
+		}
+		p.enPassantSquare = eps
+	}
+
+	hmcInt, err := strconv.Atoi(f.halfMoveClock)
+	if err != nil {
+		return fmt.Errorf("Bad FEN: %s", err.Error())
+	}
+	p.halfMoveClock = hmcInt
 
 	return nil
 }
@@ -164,7 +189,6 @@ func (p *position) setSquare(state squareState, coord coordinate) {
 }
 
 func (p *position) newGame() {
-	p.clear()
 	// TODO: set up starting position
 }
 
