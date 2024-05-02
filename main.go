@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-var tell = stdoutTell
-
 func main() {
 	tell("info string hello from karei")
 	uci(startStdinReader())

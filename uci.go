@@ -121,8 +121,18 @@ func handlePosition(tokens *[]string) {
 }
 
 func handleDebug(tokens *[]string) {
-	// debug [ on | off ]
-	tell("info string debug not implemented")
+	// [ on | off ]
+	mode := popFromQueue(tokens)
+	switch mode {
+	case "on":
+		debug = true
+		tell("info string debug mode on")
+	case "off":
+		debug = false
+		tell("info string debug mode off")
+	default:
+		tell("info string unrecognised debug mode ", mode)
+	}
 }
 
 func handleRegister(tokens *[]string) {

@@ -69,7 +69,7 @@ type position struct {
 	castlingRights         castlingRights
 	activeColour           colour
 	pieceColourTypeCounter [12]int
-	halfMoveClock          int
+	halfMoveClock          uint8
 }
 
 func (p position) occupiedMask() bitBoard {
@@ -159,7 +159,10 @@ func (p *position) loadFEN(f fen) error {
 	if err != nil {
 		return fmt.Errorf("Bad FEN: %s", err.Error())
 	}
-	p.halfMoveClock = hmcInt
+	if hmcInt < 0 {
+		return fmt.Errorf("Bad FEN: half move clock is negative")
+	}
+	p.halfMoveClock = uint8(hmcInt)
 
 	return nil
 }
