@@ -14,6 +14,10 @@ func (b *bitBoard) set(coord coordinate) {
 	*b |= 1 << coord
 }
 
+func (b bitBoard) get(coord coordinate) bool {
+	return b&(1<<coord) != 0
+}
+
 func (b *bitBoard) clear(coord coordinate) {
 	*b &= bitBoard(^uint64(1) << coord)
 }
