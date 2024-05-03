@@ -80,12 +80,12 @@ func (p *position) loadFEN(f fen) error {
 	currentRow, currentColumn := 7, 0
 	for _, currentRune := range f.boardState {
 		if currentColumn > 8 {
-			return fmt.Errorf("Bad FEN: overfilled row during board specification.")
+			return fmt.Errorf("bad FEN: overfilled row during board specification, row %v col %v", currentRow, currentColumn)
 		}
 
 		if currentRune == '/' {
 			if currentColumn != 8 {
-				return fmt.Errorf("Bad FEN: underfilled row during board specification.")
+				return fmt.Errorf("bad FEN: underfilled row during board specification, row %v col %v", currentRow, currentColumn)
 			}
 
 			currentRow--
@@ -93,7 +93,7 @@ func (p *position) loadFEN(f fen) error {
 			continue
 		}
 
-		if numEmptySquares, err := strconv.Atoi(string(currentRune)); err != nil {
+		if numEmptySquares, err := strconv.Atoi(string(currentRune)); err == nil {
 			currentColumn += numEmptySquares
 			continue
 		}
@@ -101,11 +101,15 @@ func (p *position) loadFEN(f fen) error {
 		currentCoordinate := coordinateFromRowColumn(currentRow, currentColumn)
 		currentSquareState, err := squareStateFromRune(currentRune)
 
+		fmt.Printf("coordinate %v\n", currentCoordinate)
+		fmt.Printf("squareState %v\n", currentSquareState)
+
 		if err != nil {
 			return fmt.Errorf("Bad FEN: %s", err.Error())
 		}
 
 		p.setSquare(currentSquareState, currentCoordinate)
+		currentColumn++
 	}
 
 	switch f.activeColour {

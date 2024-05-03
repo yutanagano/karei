@@ -7,7 +7,7 @@ import (
 )
 
 func startTestUci() (chan string, chan string) {
-	fromUci := make(chan string)
+	fromUci := make(chan string, 100)
 	toUci := make(chan string)
 
 	tell = func(tokens ...string) {
@@ -117,42 +117,52 @@ func TestPopFromQueue(t *testing.T) {
 	}
 }
 
-// func TestPosition(t *testing.T) {
-// 	type testSpec struct {
-// 		squareChecks []struct {
-// 			coordinate
-// 			squareState
-// 		}
-// 		enPassantSquare coordinate
-// 		castlingRights
-// 		activeColour  colour
-// 		halfMoveClock uint8
-// 	}
+func TestPosition(t *testing.T) {
+	type squareCheck struct {
+		coordinate
+		squareState
+	}
 
-// 	tests := []struct {
-// 		name string
-// 		arguments string
-// 		testSpec
-// 	}{
-// 		{
-// 			"fen",
-// 			"fen 3rkb1r/p2nqppp/5n2/1B2p1B1/4P3/1Q6/PPP2PPP/2KR3R w k - 3 13",
-// 			testSpec{
-// 				{ {d8,blackRook}, {c1,whiteKing}, {g7,blackPawn}, {g5,whiteBishop}, {e1,empty} },
-// 				nullCoordinate,
-// 				0b0100,
-// 				white,
-// 				13
-// 			},
-// 		}
-// 	}
+	type verificationSpec struct {
+		squareChecks    []squareCheck
+		enPassantSquare coordinate
+		castlingRights
+		activeColour  colour
+		halfMoveClock uint8
+	}
 
-// 	for _, test := range tests {
-// 		t.Run(
-// 			test.name,
-// 			func (t *testing.T) {
-// 				handlePosition(test.arguments)
-// 			}
-// 		)
-// 	}
-// }
+	type testSpec struct {
+		name  string
+		input string
+		verificationSpec
+	}
+
+	tests := []testSpec{
+		{
+			"fen",
+			"position fen 3rkb1r/p2nqppp/5n2/1B2p1B1/4P3/1Q6/PPP2PPP/2KR3R w k - 3 13",
+			verificationSpec{
+				[]squareCheck{{d8, blackRook}, {c1, whiteKing}, {g7, blackPawn}, {g5, whiteBishop}, {e1, empty}},
+				nullCoordinate,
+				0b0100,
+				white,
+				13,
+			},
+		},
+	}
+
+	_, toUci := startTestUci()
+
+	runTest := func(t *testing.T, test testSpec) {
+		toUci <- test.input
+		for _, sc := range test.verificationSpec.squareChecks {
+			if result := currentPosition.board[sc.coordinate]; result != sc.squareState {
+				t.Errorf("expected %v at %v, got %v", sc.squareState, sc.coordinate, result)
+			}
+		}
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) { runTest(t, test) })
+	}
+}

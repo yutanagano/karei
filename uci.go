@@ -110,8 +110,10 @@ func handlePosition(tokens *[]string) {
 		return
 	}
 
-	tell("info string parsing FEN: ", positionFen.toString())
-	// p = positionFen.toPosition()
+	err := currentPosition.loadFEN(positionFen)
+	if err != nil {
+		fmt.Printf("error loading FEN: %s", err.Error())
+	}
 
 	nextToken := popFromQueue(tokens)
 	if nextToken == "moves" {
