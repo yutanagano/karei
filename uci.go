@@ -20,7 +20,6 @@ func uci(fromGUI chan string) {
 	for !quit {
 		select {
 		case input := <-fromGUI:
-			input = strings.ToLower(input)
 			tokens = strings.Split(input, " ")
 			command := popFromQueue(&tokens)
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -23,13 +24,28 @@ func startTestUci() (chan string, chan string) {
 	return fromUci, toUci
 }
 
-func getMilisecondTimeOutChannel(k uint) chan bool {
+func getMillisecondTimeOutChannel(k uint) chan bool {
 	timeOut := make(chan bool, 1)
 	go func() {
 		time.Sleep(time.Duration(k) * time.Millisecond)
 		timeOut <- true
 	}()
 	return timeOut
+}
+
+func waitUntilReady(fromUci chan string, toUci chan string, milliseconds uint) error {
+	toUci <- "isready"
+	timeOut := getMillisecondTimeOutChannel(milliseconds)
+	for {
+		select {
+		case output := <-fromUci:
+			if output == "readyok" {
+				return nil
+			}
+		case <-timeOut:
+			return fmt.Errorf("uci not ready in time (%v ms)", milliseconds)
+		}
+	}
 }
 
 func TestUci(t *testing.T) {
@@ -61,33 +77,18 @@ func TestUci(t *testing.T) {
 			"debug off",
 			[]string{"info string debug mode off"},
 		},
-		{
-			"isready",
-			"isready",
-			[]string{"readyok"},
-		},
 	}
 
 	fromUci, toUci := startTestUci()
-
-	timeOut := getMilisecondTimeOutChannel(1000)
-waitUntilListen:
-	for {
-		select {
-		case output := <-fromUci:
-			if output == "info string listening" {
-				break waitUntilListen
-			}
-		case <-timeOut:
-			t.Errorf("timeout waiting for UCI to begin listening")
-			return
-		}
+	err := waitUntilReady(fromUci, toUci, 10)
+	if err != nil {
+		t.Error(err.Error())
 	}
 
 	runTest := func(t *testing.T, test testSpec) {
 		toUci <- test.input
 		for _, expectedOutput := range test.expectedOutputs {
-			timeOut := getMilisecondTimeOutChannel(1000)
+			timeOut := getMillisecondTimeOutChannel(10)
 			select {
 			case result := <-fromUci:
 				if result != expectedOutput {
@@ -123,7 +124,9 @@ func TestPosition(t *testing.T) {
 		squareState
 	}
 
-	type verificationSpec struct {
+	type testSpec struct {
+		name            string
+		input           string
 		squareChecks    []squareCheck
 		enPassantSquare coordinate
 		castlingRights
@@ -131,34 +134,64 @@ func TestPosition(t *testing.T) {
 		halfMoveClock uint8
 	}
 
-	type testSpec struct {
-		name  string
-		input string
-		verificationSpec
-	}
-
 	tests := []testSpec{
 		{
 			"fen",
 			"position fen 3rkb1r/p2nqppp/5n2/1B2p1B1/4P3/1Q6/PPP2PPP/2KR3R w k - 3 13",
-			verificationSpec{
-				[]squareCheck{{d8, blackRook}, {c1, whiteKing}, {g7, blackPawn}, {g5, whiteBishop}, {e1, empty}},
-				nullCoordinate,
-				0b0100,
-				white,
-				13,
+			[]squareCheck{
+				{d8, blackRook},
+				{c1, whiteKing},
+				{g7, blackPawn},
+				{g5, whiteBishop},
+				{e1, empty},
 			},
+			nullCoordinate,
+			0b0100,
+			white,
+			3,
 		},
 	}
 
-	_, toUci := startTestUci()
+	fromUci, toUci := startTestUci()
 
 	runTest := func(t *testing.T, test testSpec) {
 		toUci <- test.input
-		for _, sc := range test.verificationSpec.squareChecks {
+		err := waitUntilReady(fromUci, toUci, 10)
+		if err != nil {
+			t.Error(err.Error())
+		}
+
+		for _, sc := range test.squareChecks {
 			if result := currentPosition.board[sc.coordinate]; result != sc.squareState {
 				t.Errorf("expected %v at %v, got %v", sc.squareState, sc.coordinate, result)
 			}
+
+			if sc.squareState != empty {
+				theColour := sc.squareState.getColour()
+				thePieceType := sc.squareState.getPieceType()
+				if !currentPosition.colourMasks[theColour].get(sc.coordinate) {
+					t.Errorf("colourMask not set for %v at %v", sc.squareState, sc.coordinate)
+				}
+				if !currentPosition.pieceTypeMasks[thePieceType].get(sc.coordinate) {
+					t.Errorf("pieceTypeMask not set for %v at %v", sc.squareState, sc.coordinate)
+				}
+			}
+		}
+
+		if currentPosition.enPassantSquare != test.enPassantSquare {
+			t.Errorf("expected en passant square %v, got %v", test.enPassantSquare, currentPosition.enPassantSquare)
+		}
+
+		if currentPosition.castlingRights != test.castlingRights {
+			t.Errorf("expected castling rights %v, got %v", test.castlingRights, currentPosition.castlingRights)
+		}
+
+		if currentPosition.activeColour != test.activeColour {
+			t.Errorf("should be %v to move", test.activeColour)
+		}
+
+		if currentPosition.halfMoveClock != test.halfMoveClock {
+			t.Errorf("expected half move clock to be %v, got %v", test.halfMoveClock, currentPosition.halfMoveClock)
 		}
 	}
 

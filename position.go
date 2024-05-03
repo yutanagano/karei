@@ -76,7 +76,30 @@ func (p position) occupiedMask() bitBoard {
 	return p.colourMasks[white] | p.colourMasks[black]
 }
 
+func (p *position) clear() {
+	for idx := range p.board {
+		p.board[idx] = empty
+	}
+	for idx := range p.colourMasks {
+		p.colourMasks[idx] = 0
+	}
+	for idx := range p.pieceTypeMasks {
+		p.pieceTypeMasks[idx] = 0
+	}
+	for idx := range p.kingSquares {
+		p.kingSquares[idx] = nullCoordinate
+	}
+	p.enPassantSquare = nullCoordinate
+	p.castlingRights = 0
+	p.activeColour = white
+	for idx := range p.pieceColourTypeCounter {
+		p.pieceColourTypeCounter[idx] = 0
+	}
+	p.halfMoveClock = 0
+}
+
 func (p *position) loadFEN(f fen) error {
+	p.clear()
 	currentRow, currentColumn := 7, 0
 	for _, currentRune := range f.boardState {
 		if currentColumn > 8 {
@@ -101,11 +124,8 @@ func (p *position) loadFEN(f fen) error {
 		currentCoordinate := coordinateFromRowColumn(currentRow, currentColumn)
 		currentSquareState, err := squareStateFromRune(currentRune)
 
-		fmt.Printf("coordinate %v\n", currentCoordinate)
-		fmt.Printf("squareState %v\n", currentSquareState)
-
 		if err != nil {
-			return fmt.Errorf("Bad FEN: %s", err.Error())
+			return fmt.Errorf("bad FEN: %s", err.Error())
 		}
 
 		p.setSquare(currentSquareState, currentCoordinate)
@@ -118,7 +138,7 @@ func (p *position) loadFEN(f fen) error {
 	case "b":
 		p.activeColour = black
 	default:
-		return fmt.Errorf("Bad FEN: unrecognised colour %s", f.activeColour)
+		return fmt.Errorf("bad FEN: unrecognised colour %s", f.activeColour)
 	}
 
 	p.castlingRights = 0
@@ -144,7 +164,7 @@ func (p *position) loadFEN(f fen) error {
 				continue
 			}
 
-			return fmt.Errorf("Bad FEN: unrecognised character in castling rights specification: %c", theRune)
+			return fmt.Errorf("bad FEN: unrecognised character in castling rights specification: %c", theRune)
 		}
 	}
 
@@ -154,17 +174,17 @@ func (p *position) loadFEN(f fen) error {
 	default:
 		eps, err := coordinateFromString(f.enPassantSquare)
 		if err != nil {
-			return fmt.Errorf("Bad FEN: %s", err.Error())
+			return fmt.Errorf("bad FEN: %s", err.Error())
 		}
 		p.enPassantSquare = eps
 	}
 
 	hmcInt, err := strconv.Atoi(f.halfMoveClock)
 	if err != nil {
-		return fmt.Errorf("Bad FEN: %s", err.Error())
+		return fmt.Errorf("bad FEN: %s", err.Error())
 	}
 	if hmcInt < 0 {
-		return fmt.Errorf("Bad FEN: half move clock is negative")
+		return fmt.Errorf("bad FEN: half move clock is negative")
 	}
 	p.halfMoveClock = uint8(hmcInt)
 
