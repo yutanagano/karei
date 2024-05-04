@@ -126,7 +126,7 @@ func TestPosition(t *testing.T) {
 
 	type testSpec struct {
 		name            string
-		input           string
+		arguments       []string
 		squareChecks    []squareCheck
 		enPassantSquare coordinate
 		castlingRights
@@ -137,7 +137,7 @@ func TestPosition(t *testing.T) {
 	tests := []testSpec{
 		{
 			"fen",
-			"position fen 3rkb1r/p2nqppp/5n2/1B2p1B1/4P3/1Q6/PPP2PPP/2KR3R w k - 3 13",
+			[]string{"fen", "3rkb1r/p2nqppp/5n2/1B2p1B1/4P3/1Q6/PPP2PPP/2KR3R", "w", "k", "-", "3", "13"},
 			[]squareCheck{
 				{d8, blackRook},
 				{c1, whiteKing},
@@ -152,14 +152,8 @@ func TestPosition(t *testing.T) {
 		},
 	}
 
-	fromUci, toUci := startTestUci()
-
 	runTest := func(t *testing.T, test testSpec) {
-		toUci <- test.input
-		err := waitUntilReady(fromUci, toUci, 10)
-		if err != nil {
-			t.Error(err.Error())
-		}
+		handlePosition(test.arguments)
 
 		for _, sc := range test.squareChecks {
 			if result := currentPosition.board[sc.coordinate]; result != sc.squareState {

@@ -27,19 +27,19 @@ func uci(fromGUI chan string) {
 			case "uci":
 				handleUci()
 			case "setoption":
-				handleSetOption(&tokens)
+				handleSetOption(tokens)
 			case "isready":
 				handleIsReady()
 			case "ucinewgame":
 				handleNewGame()
 			case "position":
-				handlePosition(&tokens)
+				handlePosition(tokens)
 			case "debug":
-				handleDebug(&tokens)
+				handleDebug(tokens)
 			case "register":
-				handleRegister(&tokens)
+				handleRegister(tokens)
 			case "go":
-				handleGo(&tokens)
+				handleGo(tokens)
 			case "ponderhit":
 				handlePonderHit()
 			case "stop":
@@ -63,8 +63,8 @@ func handleUci() {
 	tell("uciok")
 }
 
-func handleSetOption(tokens *[]string) {
-	tell("info string set option ", strings.Join(*tokens, " "))
+func handleSetOption(tokens []string) {
+	tell("info string set option ", strings.Join(tokens, " "))
 	tell("info string not implemented yet")
 }
 
@@ -76,21 +76,21 @@ func handleNewGame() {
 	tell("info string ucinewgame not implemented")
 }
 
-func handlePosition(tokens *[]string) {
+func handlePosition(tokens []string) {
 	// [fen <fenstring> | startpos] (moves <move1> ... <movei>)?
 	var positionFen fen
 
-	position_specifier := popFromQueue(tokens)
+	position_specifier := popFromQueue(&tokens)
 
 	switch position_specifier {
 	case "fen":
 		positionFen = fen{
-			boardState:      popFromQueue(tokens),
-			activeColour:    popFromQueue(tokens),
-			castlingRights:  popFromQueue(tokens),
-			enPassantSquare: popFromQueue(tokens),
-			halfMoveClock:   popFromQueue(tokens),
-			fullMoveNumber:  popFromQueue(tokens),
+			boardState:      popFromQueue(&tokens),
+			activeColour:    popFromQueue(&tokens),
+			castlingRights:  popFromQueue(&tokens),
+			enPassantSquare: popFromQueue(&tokens),
+			halfMoveClock:   popFromQueue(&tokens),
+			fullMoveNumber:  popFromQueue(&tokens),
 		}
 
 	case "startpos":
@@ -114,16 +114,16 @@ func handlePosition(tokens *[]string) {
 		fmt.Printf("error loading FEN: %s", err.Error())
 	}
 
-	nextToken := popFromQueue(tokens)
+	nextToken := popFromQueue(&tokens)
 	if nextToken == "moves" {
-		tell("info string parsing moves: ", strings.Join(*tokens, " "))
-		parseMoves(tokens)
+		tell("info string parsing moves: ", strings.Join(tokens, " "))
+		parseMoves(&tokens)
 	}
 }
 
-func handleDebug(tokens *[]string) {
+func handleDebug(tokens []string) {
 	// [ on | off ]
-	mode := popFromQueue(tokens)
+	mode := popFromQueue(&tokens)
 	switch mode {
 	case "on":
 		debug = true
@@ -136,15 +136,15 @@ func handleDebug(tokens *[]string) {
 	}
 }
 
-func handleRegister(tokens *[]string) {
+func handleRegister(tokens []string) {
 	// register [ later | name <x> code <y> ]
 	tell("info string register not implemented")
 }
 
-func handleGo(tokens *[]string) {
+func handleGo(tokens []string) {
 	// go (searchmoves <move1> ... <movei>)? ponder? (wtime <x>)? (btime <x>)? (winc <x>)? (binc <x>)? (movestogo <x>)? (depth <x>)? (nodes <x>)? (mate <x>)? (movetime <x>)? infinite?
-	if len(*tokens) > 1 {
-		switch (*tokens)[1] {
+	if len(tokens) > 1 {
+		switch (tokens)[1] {
 		case "searchmoves":
 			tell("info string go searchmoves not implemented")
 		case "ponder":
@@ -170,7 +170,7 @@ func handleGo(tokens *[]string) {
 		case "infinite":
 			tell("info string go infinite not implemented")
 		default:
-			tell("info string go ", (*tokens)[1], " not implemented")
+			tell("info string go ", (tokens)[1], " not implemented")
 		}
 	} else {
 		tell("info string go not implemented")
