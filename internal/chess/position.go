@@ -1,14 +1,26 @@
-package main
+package chess
 
 import (
 	"fmt"
 	"strconv"
 )
 
-type colour uint8
-type castlingRights uint8
-type pieceType uint8
+type Position struct {
+	board                  [64]squareState
+	colourMasks            [2]bitBoard
+	pieceTypeMasks         [6]bitBoard
+	kingSquares            [2]coordinate
+	enPassantSquare        coordinate
+	castlingRights         castlingRights
+	activeColour           colour
+	pieceColourTypeCounter [12]int
+	halfMoveClock          uint8
+}
+
 type squareState uint8
+type castlingRights uint8
+type colour uint8
+type pieceType uint8
 
 const (
 	white colour = 0
@@ -47,36 +59,11 @@ const (
 	blackCastleQueenSide castlingRights = 0b1000
 )
 
-type fen struct {
-	boardState      string
-	activeColour    string
-	castlingRights  string
-	enPassantSquare string
-	halfMoveClock   string
-	fullMoveNumber  string
-}
-
-func (f fen) toString() string {
-	return f.boardState + " " + f.activeColour + " " + f.castlingRights + " " + f.enPassantSquare + " " + f.halfMoveClock + " " + f.fullMoveNumber
-}
-
-type position struct {
-	board                  [64]squareState
-	colourMasks            [2]bitBoard
-	pieceTypeMasks         [6]bitBoard
-	kingSquares            [2]coordinate
-	enPassantSquare        coordinate
-	castlingRights         castlingRights
-	activeColour           colour
-	pieceColourTypeCounter [12]int
-	halfMoveClock          uint8
-}
-
-func (p position) occupiedMask() bitBoard {
+func (p Position) occupiedMask() bitBoard {
 	return p.colourMasks[white] | p.colourMasks[black]
 }
 
-func (p *position) clear() {
+func (p *Position) clear() {
 	for idx := range p.board {
 		p.board[idx] = empty
 	}
@@ -98,10 +85,10 @@ func (p *position) clear() {
 	p.halfMoveClock = 0
 }
 
-func (p *position) loadFEN(f fen) error {
+func (p *Position) LoadFEN(f FEN) error {
 	p.clear()
 	currentRow, currentColumn := 7, 0
-	for _, currentRune := range f.boardState {
+	for _, currentRune := range f.BoardState {
 		if currentColumn > 8 {
 			return fmt.Errorf("bad FEN: overfilled row during board specification, row %v col %v", currentRow, currentColumn)
 		}
@@ -132,21 +119,21 @@ func (p *position) loadFEN(f fen) error {
 		currentColumn++
 	}
 
-	switch f.activeColour {
+	switch f.ActiveColour {
 	case "w":
 		p.activeColour = white
 	case "b":
 		p.activeColour = black
 	default:
-		return fmt.Errorf("bad FEN: unrecognised colour %s", f.activeColour)
+		return fmt.Errorf("bad FEN: unrecognised colour %s", f.ActiveColour)
 	}
 
 	p.castlingRights = 0
-	switch f.castlingRights {
+	switch f.CastlingRights {
 	case "-":
 		break
 	default:
-		for _, theRune := range f.castlingRights {
+		for _, theRune := range f.CastlingRights {
 			if theRune == 'K' {
 				p.castlingRights |= whiteCastleKingSide
 				continue
@@ -168,18 +155,18 @@ func (p *position) loadFEN(f fen) error {
 		}
 	}
 
-	switch f.enPassantSquare {
+	switch f.EnPassantSquare {
 	case "-":
 		p.enPassantSquare = nullCoordinate
 	default:
-		eps, err := coordinateFromString(f.enPassantSquare)
+		eps, err := coordinateFromString(f.EnPassantSquare)
 		if err != nil {
 			return fmt.Errorf("bad FEN: %s", err.Error())
 		}
 		p.enPassantSquare = eps
 	}
 
-	hmcInt, err := strconv.Atoi(f.halfMoveClock)
+	hmcInt, err := strconv.Atoi(f.HalfMoveClock)
 	if err != nil {
 		return fmt.Errorf("bad FEN: %s", err.Error())
 	}
@@ -191,7 +178,7 @@ func (p *position) loadFEN(f fen) error {
 	return nil
 }
 
-func (p *position) setSquare(state squareState, coord coordinate) {
+func (p *Position) setSquare(state squareState, coord coordinate) {
 	p.board[coord] = state
 
 	if state == empty {
@@ -215,7 +202,7 @@ func (p *position) setSquare(state squareState, coord coordinate) {
 	p.pieceTypeMasks[thePieceType].set(coord)
 }
 
-func (p *position) newGame() {
+func (p *Position) newGame() {
 	// TODO: set up starting position
 }
 
