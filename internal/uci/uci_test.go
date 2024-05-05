@@ -11,13 +11,13 @@ import (
 )
 
 func TestUci(t *testing.T) {
-	type testSpec struct {
+	type testCase struct {
 		name            string
 		input           string
 		expectedOutputs []string
 	}
 
-	tests := []testSpec{
+	testCases := []testCase{
 		{
 			"uci",
 			"uci",
@@ -48,9 +48,9 @@ func TestUci(t *testing.T) {
 		t.Error(err.Error())
 	}
 
-	runTest := func(t *testing.T, test testSpec) {
-		toUCI <- test.input
-		for _, expectedOutput := range test.expectedOutputs {
+	checkCase := func(t *testing.T, c testCase) {
+		toUCI <- c.input
+		for _, expectedOutput := range c.expectedOutputs {
 			timeOut := getMillisecondTimeOutChannel(10)
 			select {
 			case result := <-fromUCI:
@@ -63,19 +63,19 @@ func TestUci(t *testing.T) {
 		}
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) { runTest(t, test) })
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) { checkCase(t, c) })
 	}
 }
 
 func TestHandlePosition(t *testing.T) {
-	type testSpec struct {
+	type testCase struct {
 		name      string
 		arguments util.Queue[string]
 		fen       chess.FEN
 	}
 
-	tests := []testSpec{
+	testCases := []testCase{
 		{
 			"scotch",
 			util.Queue[string]{
@@ -98,18 +98,18 @@ func TestHandlePosition(t *testing.T) {
 		},
 	}
 
-	runTest := func(t *testing.T, test testSpec) {
-		handlePosition(test.arguments)
+	checkCase := func(t *testing.T, c testCase) {
+		handlePosition(c.arguments)
 		expected := chess.Position{}
-		expected.LoadFEN(test.fen)
+		expected.LoadFEN(c.fen)
 
 		if !reflect.DeepEqual(currentPosition, expected) {
 			t.Errorf("expected position %v, got %v", expected, currentPosition)
 		}
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) { runTest(t, test) })
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) { checkCase(t, c) })
 	}
 }
 

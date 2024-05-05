@@ -3,22 +3,20 @@ package chess
 import "testing"
 
 func TestLoadFEN(t *testing.T) {
-	type squareCheck struct {
-		coordinate
-		squareState
-	}
-
-	type testSpec struct {
+	type testCase struct {
 		name string
 		FEN
-		squareChecks    []squareCheck
+		squareChecks []struct {
+			coordinate
+			squareState
+		}
 		enPassantSquare coordinate
 		castlingRights
 		activeColour  colour
 		halfMoveClock uint8
 	}
 
-	tests := []testSpec{
+	testCases := []testCase{
 		{
 			"opera",
 			FEN{
@@ -29,7 +27,10 @@ func TestLoadFEN(t *testing.T) {
 				HalfMoveClock:   "3",
 				FullMoveNumber:  "13",
 			},
-			[]squareCheck{
+			[]struct {
+				coordinate
+				squareState
+			}{
 				{d8, blackRook},
 				{c1, whiteKing},
 				{g7, blackPawn},
@@ -43,11 +44,11 @@ func TestLoadFEN(t *testing.T) {
 		},
 	}
 
-	runTest := func(t *testing.T, test testSpec) {
+	checkCase := func(t *testing.T, c testCase) {
 		thePosition := Position{}
-		thePosition.LoadFEN(test.FEN)
+		thePosition.LoadFEN(c.FEN)
 
-		for _, sc := range test.squareChecks {
+		for _, sc := range c.squareChecks {
 			if result := thePosition.board[sc.coordinate]; result != sc.squareState {
 				t.Errorf("expected %v at %v, got %v", sc.squareState, sc.coordinate, result)
 			}
@@ -64,24 +65,24 @@ func TestLoadFEN(t *testing.T) {
 			}
 		}
 
-		if thePosition.enPassantSquare != test.enPassantSquare {
-			t.Errorf("expected en passant square %v, got %v", test.enPassantSquare, thePosition.enPassantSquare)
+		if thePosition.enPassantSquare != c.enPassantSquare {
+			t.Errorf("expected en passant square %v, got %v", c.enPassantSquare, thePosition.enPassantSquare)
 		}
 
-		if thePosition.castlingRights != test.castlingRights {
-			t.Errorf("expected castling rights %v, got %v", test.castlingRights, thePosition.castlingRights)
+		if thePosition.castlingRights != c.castlingRights {
+			t.Errorf("expected castling rights %v, got %v", c.castlingRights, thePosition.castlingRights)
 		}
 
-		if thePosition.activeColour != test.activeColour {
-			t.Errorf("should be %v to move", test.activeColour)
+		if thePosition.activeColour != c.activeColour {
+			t.Errorf("should be %v to move", c.activeColour)
 		}
 
-		if thePosition.halfMoveClock != test.halfMoveClock {
-			t.Errorf("expected half move clock to be %v, got %v", test.halfMoveClock, thePosition.halfMoveClock)
+		if thePosition.halfMoveClock != c.halfMoveClock {
+			t.Errorf("expected half move clock to be %v, got %v", c.halfMoveClock, thePosition.halfMoveClock)
 		}
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) { runTest(t, test) })
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) { checkCase(t, c) })
 	}
 }
