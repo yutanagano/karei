@@ -93,7 +93,7 @@ func handleIsReady() {
 }
 
 func handleNewGame() {
-	toClient <- "info string ucinewgame not implemented"
+	currentPosition.LoadFEN(chess.GetStartingFEN())
 }
 
 func handlePosition(tokens util.Queue[string]) {
@@ -114,15 +114,7 @@ func handlePosition(tokens util.Queue[string]) {
 		}
 
 	case "startpos":
-		positionFen = chess.FEN{
-			BoardState:      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
-			ActiveColour:    "w",
-			CastlingRights:  "KQkq",
-			EnPassantSquare: "-",
-			HalfMoveClock:   "0",
-			FullMoveNumber:  "1",
-		}
-
+		positionFen = chess.GetStartingFEN()
 	default:
 		err := fmt.Errorf("expected position specifier to be 'fen' or 'startpos', got %s", position_specifier)
 		toClient <- "info string " + err.Error()

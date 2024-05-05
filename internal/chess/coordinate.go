@@ -206,8 +206,8 @@ var coordToStringMap = map[coordinate]string{
 	h8: "h8",
 }
 
-func coordinateFromRowColumn(row int, col int) coordinate {
-	coordinateInt := row*8 + col
+func coordinateFromRankFileIndices(rankIndex int, fileIndex int) coordinate {
+	coordinateInt := rankIndex*8 + fileIndex
 	return coordinate(coordinateInt)
 }
 
@@ -223,4 +223,12 @@ func coordinateFromString(s string) (coordinate, error) {
 
 func (c coordinate) toString() string {
 	return coordToStringMap[c]
+}
+
+func (c coordinate) getRankIndex() uint8 {
+	return uint8(c) / 8
+}
+
+func (c coordinate) getFileIndex() uint8 {
+	return uint8(c) % 8
 }
