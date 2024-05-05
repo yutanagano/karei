@@ -8,22 +8,22 @@ import (
 func TestMoveFromString(t *testing.T) {
 	type testCase struct {
 		moveString string
-		expected   Move
+		expected   move
 	}
 
 	testCases := []testCase{
 		{
 			"e2e4",
-			Move{e2, e4, empty},
+			move{e2, e4, empty},
 		},
 		{
 			"f7f8Q",
-			Move{f7, f8, whiteQueen},
+			move{f7, f8, whiteQueen},
 		},
 	}
 
 	checkCase := func(t *testing.T, c testCase) {
-		result, err := MoveFromString(c.moveString)
+		result, err := moveFromString(c.moveString)
 		if err != nil {
 			t.Error(err)
 		}
@@ -40,23 +40,23 @@ func TestMoveFromString(t *testing.T) {
 
 func TestToString(t *testing.T) {
 	type testCase struct {
-		move     Move
+		move     move
 		expected string
 	}
 
 	testCases := []testCase{
 		{
-			Move{d7, d5, empty},
+			move{d7, d5, empty},
 			"d7d5",
 		},
 		{
-			Move{h2, h1, blackQueen},
+			move{h2, h1, blackQueen},
 			"h2h1q",
 		},
 	}
 
 	checkCase := func(t *testing.T, c testCase) {
-		result := c.move.ToString()
+		result := c.move.toString()
 		if result != c.expected {
 			t.Errorf("expected %s, got %s", c.expected, result)
 		}

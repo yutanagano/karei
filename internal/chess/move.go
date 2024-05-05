@@ -2,14 +2,14 @@ package chess
 
 import "fmt"
 
-type Move struct {
+type move struct {
 	From      coordinate
 	To        coordinate
 	Promotion squareState
 }
 
-func MoveFromString(s string) (Move, error) {
-	var result Move
+func moveFromString(s string) (move, error) {
+	var result move
 	var fromSquare, toSquare coordinate
 	promotion := empty
 
@@ -47,10 +47,14 @@ func MoveFromString(s string) (Move, error) {
 	return result, nil
 }
 
-func (m Move) ToString() string {
+func (m move) toString() string {
 	if m.Promotion != empty {
 		return m.From.toString() + m.To.toString() + string(m.Promotion.toRune())
 	}
 
 	return m.From.toString() + m.To.toString()
+}
+
+func (m move) getOffset() int {
+	return int(m.To) - int(m.From)
 }

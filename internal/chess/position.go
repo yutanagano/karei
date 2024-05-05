@@ -17,7 +17,6 @@ type Position struct {
 	halfMoveClock          uint8
 }
 
-type castlingRights uint8
 type colour uint8
 type pieceType uint8
 
@@ -26,6 +25,13 @@ const (
 	black colour = 1
 )
 
+func (c colour) getOpposite() colour {
+	if c == white {
+		return black
+	}
+	return white
+}
+
 const (
 	king pieceType = iota
 	queen
@@ -33,13 +39,6 @@ const (
 	bishop
 	knight
 	pawn
-)
-
-const (
-	whiteCastleKingSide  castlingRights = 0b0001
-	whiteCastleQueenSide castlingRights = 0b0010
-	blackCastleKingSide  castlingRights = 0b0100
-	blackCastleQueenSide castlingRights = 0b1000
 )
 
 func (p Position) occupiedMask() bitBoard {
@@ -98,7 +97,7 @@ func (p *Position) LoadFEN(f FEN) error {
 			return fmt.Errorf("bad FEN: %s", err.Error())
 		}
 
-		p.setSquare(currentSquareState, currentCoordinate)
+		p.setSquare(currentCoordinate, currentSquareState)
 		currentFileIndex++
 	}
 
@@ -161,33 +160,122 @@ func (p *Position) LoadFEN(f FEN) error {
 	return nil
 }
 
-func (p *Position) setSquare(state squareState, coord coordinate) {
-	p.board[coord] = state
+func (p *Position) MakeMove(theMove move) error {
+	// check for pseudolegality
+	// TODO make this check robust
+	fromSquareState := p.board[theMove.From]
+	if fromSquareState == empty {
+		return fmt.Errorf("no piece to move: %s", theMove.toString())
+	}
+	if fromSquareState.getColour() != p.activeColour {
+		return fmt.Errorf("attempting to move piece of wrong colour: %s", theMove.toString())
+	}
 
-	if state == empty {
-		p.colourMasks[white].clear(coord)
-		p.colourMasks[black].clear(coord)
+	toSquareState := p.board[theMove.To]
+	if toSquareState.getColour() == p.activeColour {
+		return fmt.Errorf("cannot move piece to square occupied by friendly piece: %s", theMove.toString())
+	}
+
+	if theMove.Promotion != empty && theMove.Promotion.getColour() != p.activeColour {
+		return fmt.Errorf("cannot promote to enemy piece: %s", theMove.toString())
+	}
+
+	// make pseudomove
+
+	return nil
+}
+
+func (p *Position) makePseudoMove(theMove move) (resultsInCheck bool) {
+	p.enPassantSquare = nullCoordinate
+
+	fromSquareState := p.board[theMove.From]
+
+	switch fromSquareState {
+	case whiteKing:
+		p.castlingRights.turnOff(whiteCastleKingSide | whiteCastleQueenSide)
+		if theMove.From == e1 && theMove.To == c1 {
+			p.setSquare(a1, empty)
+			p.setSquare(d1, whiteRook)
+		} else if theMove.From == e1 && theMove.To == g1 {
+			p.setSquare(h1, empty)
+			p.setSquare(f1, whiteRook)
+		}
+	case blackKing:
+		p.castlingRights.turnOff(blackCastleKingSide | blackCastleQueenSide)
+		if theMove.From == e8 && theMove.To == c8 {
+			p.setSquare(a8, empty)
+			p.setSquare(d8, whiteRook)
+		} else if theMove.From == e8 && theMove.To == g8 {
+			p.setSquare(h8, empty)
+			p.setSquare(f8, whiteRook)
+		}
+	case whiteRook:
+		if p.castlingRights.isSet(whiteCastleKingSide) && theMove.From == h1 {
+			p.castlingRights.turnOff(whiteCastleKingSide)
+		} else if p.castlingRights.isSet(whiteCastleQueenSide) && theMove.From == a1 {
+			p.castlingRights.turnOff(whiteCastleQueenSide)
+		}
+	case blackRook:
+		if p.castlingRights.isSet(blackCastleKingSide) && theMove.From == h8 {
+			p.castlingRights.turnOff(blackCastleKingSide)
+		} else if p.castlingRights.isSet(blackCastleQueenSide) && theMove.From == a8 {
+			p.castlingRights.turnOff(blackCastleQueenSide)
+		}
+	case whitePawn:
+		switch theMove.getOffset() {
+		case 16:
+			p.enPassantSquare = theMove.From + 8
+		case 7:
+			p.setSquare(theMove.From-1, empty)
+		case 9:
+			p.setSquare(theMove.From+1, empty)
+		}
+	case blackPawn:
+		switch theMove.getOffset() {
+		case -16:
+			p.enPassantSquare = theMove.From - 8
+		case -7:
+			p.setSquare(theMove.From+1, empty)
+		case -9:
+			p.setSquare(theMove.From-1, empty)
+		}
+	}
+
+	p.setSquare(theMove.From, empty)
+	if theMove.Promotion != empty {
+		p.setSquare(theMove.To, theMove.Promotion)
+	} else {
+		p.setSquare(theMove.To, fromSquareState)
+	}
+
+	p.activeColour = p.activeColour.getOpposite()
+
+	// TODO check if the player who moved is now in check
+	resultsInCheck = false
+
+	return resultsInCheck
+}
+
+func (p *Position) setSquare(theCoord coordinate, theState squareState) {
+	p.board[theCoord] = theState
+
+	if theState == empty {
+		p.colourMasks[white].clear(theCoord)
+		p.colourMasks[black].clear(theCoord)
 
 		for thePieceType := king; thePieceType <= pawn; thePieceType++ {
-			p.pieceTypeMasks[thePieceType].clear(coord)
+			p.pieceTypeMasks[thePieceType].clear(theCoord)
 		}
 		return
 	}
 
-	thePieceType := state.getPieceType()
-	theColour := state.getColour()
+	thePieceType := theState.getPieceType()
+	theColour := theState.getColour()
 
 	if thePieceType == king {
-		p.kingSquares[theColour] = coord
+		p.kingSquares[theColour] = theCoord
 	}
 
-	p.colourMasks[theColour].set(coord)
-	p.pieceTypeMasks[thePieceType].set(coord)
-}
-
-func (p *Position) newGame() {
-	// TODO: set up starting position
-}
-
-func parseMoves(tokens *[]string) {
+	p.colourMasks[theColour].set(theCoord)
+	p.pieceTypeMasks[thePieceType].set(theCoord)
 }
