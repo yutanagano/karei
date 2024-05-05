@@ -1,12 +1,17 @@
 package chess
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
 
 type move struct {
 	From      coordinate
 	To        coordinate
 	Promotion squareState
 }
+
+type moveList []move
 
 func moveFromString(s string) (move, error) {
 	var result move
@@ -57,4 +62,17 @@ func (m move) toString() string {
 
 func (m move) getOffset() int {
 	return int(m.To) - int(m.From)
+}
+
+func (l *moveList) addMove(from coordinate, to coordinate, promotion squareState) {
+	*l = append(*l, move{from, to, promotion})
+}
+
+func (l moveList) contains(query move) bool {
+	for _, element := range l {
+		if reflect.DeepEqual(query, element) {
+			return true
+		}
+	}
+	return false
 }

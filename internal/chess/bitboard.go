@@ -22,14 +22,14 @@ func (b *bitBoard) clear(coord coordinate) {
 	*b &= bitBoard(^uint64(1) << coord)
 }
 
-func (b *bitBoard) pop() (place int, ok bool) {
+func (b *bitBoard) pop() (place coordinate, ok bool) {
 	if *b == 0 {
 		place = 0
 		ok = false
 		return place, ok
 	}
 
-	place = bits.TrailingZeros64(uint64(*b))
+	place = coordinate(bits.TrailingZeros64(uint64(*b)))
 	ok = true
 	*b &= ^(1 << place)
 

@@ -206,9 +206,14 @@ var coordToStringMap = map[coordinate]string{
 	h8: "h8",
 }
 
-func coordinateFromRankFileIndices(rankIndex int, fileIndex int) coordinate {
+func coordinateFromRankFileIndices(rankIndex int8, fileIndex int8) (coordinate, error) {
 	coordinateInt := rankIndex*8 + fileIndex
-	return coordinate(coordinateInt)
+
+	if coordinateInt < 0 || coordinateInt >= 64 {
+		return nullCoordinate, fmt.Errorf("invalid rank/file: %v/%v", rankIndex, fileIndex)
+	}
+
+	return coordinate(coordinateInt), nil
 }
 
 func coordinateFromString(s string) (coordinate, error) {
@@ -225,10 +230,10 @@ func (c coordinate) toString() string {
 	return coordToStringMap[c]
 }
 
-func (c coordinate) getRankIndex() uint8 {
-	return uint8(c) / 8
+func (c coordinate) getRankIndex() int8 {
+	return int8(c) / 8
 }
 
-func (c coordinate) getFileIndex() uint8 {
-	return uint8(c) % 8
+func (c coordinate) getFileIndex() int8 {
+	return int8(c) % 8
 }

@@ -40,7 +40,7 @@ func TestPop(t *testing.T) {
 	type testCase struct {
 		originalBitBoard bitBoard
 		expectedOk       bool
-		expectedPlace    int
+		expectedPlace    coordinate
 		expectedBitBoard bitBoard
 	}
 

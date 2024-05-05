@@ -52,7 +52,7 @@ func (s squareState) toRune() rune {
 }
 
 func (s squareState) getPieceType() pieceType {
-	switch s / 6 {
+	switch s / 2 {
 	case 0:
 		return king
 	case 1:

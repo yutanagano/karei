@@ -7,8 +7,9 @@ import (
 
 type Position struct {
 	board                  [64]squareState
-	colourMasks            [2]bitBoard
-	pieceTypeMasks         [6]bitBoard
+	occupationByColour     [2]bitBoard
+	occupationByPieceType  [6]bitBoard
+	controlByColour        [2]bitBoard
 	kingSquares            [2]coordinate
 	enPassantSquare        coordinate
 	castlingRights         castlingRights
@@ -17,59 +18,9 @@ type Position struct {
 	halfMoveClock          uint8
 }
 
-type colour uint8
-type pieceType uint8
-
-const (
-	white colour = 0
-	black colour = 1
-)
-
-func (c colour) getOpposite() colour {
-	if c == white {
-		return black
-	}
-	return white
-}
-
-const (
-	king pieceType = iota
-	queen
-	rook
-	bishop
-	knight
-	pawn
-)
-
-func (p Position) occupiedMask() bitBoard {
-	return p.colourMasks[white] | p.colourMasks[black]
-}
-
-func (p *Position) clear() {
-	for idx := range p.board {
-		p.board[idx] = empty
-	}
-	for idx := range p.colourMasks {
-		p.colourMasks[idx] = 0
-	}
-	for idx := range p.pieceTypeMasks {
-		p.pieceTypeMasks[idx] = 0
-	}
-	for idx := range p.kingSquares {
-		p.kingSquares[idx] = nullCoordinate
-	}
-	p.enPassantSquare = nullCoordinate
-	p.castlingRights = 0
-	p.activeColour = white
-	for idx := range p.pieceColourTypeCounter {
-		p.pieceColourTypeCounter[idx] = 0
-	}
-	p.halfMoveClock = 0
-}
-
 func (p *Position) LoadFEN(f FEN) error {
 	p.clear()
-	currentRankIndex, currentFileIndex := 7, 0
+	var currentRankIndex, currentFileIndex int8 = 7, 0
 	for _, currentRune := range f.BoardState {
 		if currentFileIndex > 8 {
 			return fmt.Errorf("bad FEN: overfilled row during board specification, row %v col %v", currentRankIndex, currentFileIndex)
@@ -86,11 +37,11 @@ func (p *Position) LoadFEN(f FEN) error {
 		}
 
 		if numEmptySquares, err := strconv.Atoi(string(currentRune)); err == nil {
-			currentFileIndex += numEmptySquares
+			currentFileIndex += int8(numEmptySquares)
 			continue
 		}
 
-		currentCoordinate := coordinateFromRankFileIndices(currentRankIndex, currentFileIndex)
+		currentCoordinate, _ := coordinateFromRankFileIndices(currentRankIndex, currentFileIndex)
 		currentSquareState, err := squareStateFromRune(currentRune)
 
 		if err != nil {
@@ -158,6 +109,239 @@ func (p *Position) LoadFEN(f FEN) error {
 	p.halfMoveClock = uint8(hmcInt)
 
 	return nil
+}
+
+func (p *Position) clear() {
+	for idx := range p.board {
+		p.board[idx] = empty
+	}
+	for idx := range p.occupationByColour {
+		p.occupationByColour[idx] = 0
+	}
+	for idx := range p.occupationByPieceType {
+		p.occupationByPieceType[idx] = 0
+	}
+	for idx := range p.controlByColour {
+		p.controlByColour[idx] = 0
+	}
+	for idx := range p.kingSquares {
+		p.kingSquares[idx] = nullCoordinate
+	}
+	p.enPassantSquare = nullCoordinate
+	p.castlingRights = 0
+	p.activeColour = white
+	for idx := range p.pieceColourTypeCounter {
+		p.pieceColourTypeCounter[idx] = 0
+	}
+	p.halfMoveClock = 0
+}
+
+func (p *Position) setSquare(theCoord coordinate, theState squareState) {
+	p.board[theCoord] = theState
+
+	if theState == empty {
+		p.occupationByColour[white].clear(theCoord)
+		p.occupationByColour[black].clear(theCoord)
+
+		for thePieceType := king; thePieceType <= pawn; thePieceType++ {
+			p.occupationByPieceType[thePieceType].clear(theCoord)
+		}
+		return
+	}
+
+	thePieceType := theState.getPieceType()
+	theColour := theState.getColour()
+
+	if thePieceType == king {
+		p.kingSquares[theColour] = theCoord
+	}
+
+	p.occupationByColour[theColour].set(theCoord)
+	p.occupationByPieceType[thePieceType].set(theCoord)
+}
+
+func (p Position) getPseudoLegalMoves() moveList {
+	pseudoLegalMoves := moveList{}
+
+	pseudoLegalMoves = append(pseudoLegalMoves, p.getPseudoLegalKingMoves()...)
+	pseudoLegalMoves = append(pseudoLegalMoves, p.getPseudoLegalQueenMoves()...)
+	pseudoLegalMoves = append(pseudoLegalMoves, p.getPseudoLegalRookMoves()...)
+	pseudoLegalMoves = append(pseudoLegalMoves, p.getPseudoLegalBishopMoves()...)
+	// pseudoLegalMoves = append(pseudoLegalMoves, p.getPseudoLegalKnightMoves()...)
+	// pseudoLegalMoves = append(pseudoLegalMoves, p.getPseudoLegalPawnMoves()...)
+
+	return pseudoLegalMoves
+}
+
+func (p Position) getPseudoLegalKingMoves() moveList {
+	moves := moveList{}
+
+	currentCoord := p.kingSquares[p.activeColour]
+	currentRank := currentCoord.getRankIndex()
+	currentFile := currentCoord.getFileIndex()
+
+	isLegalDestination := func(toCoord coordinate) bool {
+		toSquareState := p.board[toCoord]
+		if toSquareState != empty && toSquareState.getColour() == p.activeColour {
+			return false
+		}
+		return true
+	}
+
+	for _, rankOffset := range []int8{-1, 0, 1} {
+		for _, fileOffset := range []int8{-1, 0, 1} {
+			if rankOffset == 0 && fileOffset == 0 {
+				continue
+			}
+			toCoord, err := coordinateFromRankFileIndices(currentRank+rankOffset, currentFile+fileOffset)
+			if err != nil {
+				continue
+			}
+			if !isLegalDestination(toCoord) {
+				continue
+			}
+			moves.addMove(currentCoord, toCoord, empty)
+		}
+	}
+
+	return moves
+}
+
+func (p Position) getPseudoLegalQueenMoves() moveList {
+	moves := moveList{}
+
+	queensBitBoard := p.occupationByColour[p.activeColour] & p.occupationByPieceType[queen]
+
+	for {
+		currentCoord, ok := queensBitBoard.pop()
+		if !ok {
+			break
+		}
+		moves = append(moves, p.getPseudoLegalRookMovesFromCoordinate(currentCoord)...)
+		moves = append(moves, p.getPseudoLegalBishopMovesFromCoordinate(currentCoord)...)
+	}
+
+	return moves
+}
+
+func (p Position) getPseudoLegalRookMoves() moveList {
+	moves := moveList{}
+
+	rooksBitBoard := p.occupationByColour[p.activeColour] & p.occupationByPieceType[rook]
+
+	for {
+		currentCoord, ok := rooksBitBoard.pop()
+		if !ok {
+			break
+		}
+		moves = append(moves, p.getPseudoLegalRookMovesFromCoordinate(currentCoord)...)
+	}
+
+	return moves
+}
+
+func (p Position) getPseudoLegalBishopMoves() moveList {
+	moves := moveList{}
+
+	bishopsBitBoard := p.occupationByColour[p.activeColour] & p.occupationByPieceType[bishop]
+
+	for {
+		currentCoord, ok := bishopsBitBoard.pop()
+		if !ok {
+			break
+		}
+		moves = append(moves, p.getPseudoLegalBishopMovesFromCoordinate(currentCoord)...)
+	}
+
+	return moves
+}
+
+func (p Position) getPseudoLegalRookMovesFromCoordinate(theCoord coordinate) moveList {
+	moves := moveList{}
+
+	currentRank := theCoord.getRankIndex()
+	currentFile := theCoord.getFileIndex()
+
+	for toRank := currentRank + 1; toRank < 8; toRank++ {
+		toCoord, _ := coordinateFromRankFileIndices(toRank, currentFile)
+		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
+		if deadEnd {
+			break
+		}
+	}
+	for toRank := currentRank - 1; toRank >= 0; toRank-- {
+		toCoord, _ := coordinateFromRankFileIndices(toRank, currentFile)
+		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
+		if deadEnd {
+			break
+		}
+	}
+	for toFile := currentFile + 1; toFile < 8; toFile++ {
+		toCoord, _ := coordinateFromRankFileIndices(currentRank, toFile)
+		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
+		if deadEnd {
+			break
+		}
+	}
+	for toFile := currentFile - 1; toFile >= 0; toFile-- {
+		toCoord, _ := coordinateFromRankFileIndices(currentRank, toFile)
+		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
+		if deadEnd {
+			break
+		}
+	}
+
+	return moves
+}
+
+func (p Position) getPseudoLegalBishopMovesFromCoordinate(theCoord coordinate) moveList {
+	moves := moveList{}
+
+	currentRank := theCoord.getRankIndex()
+	currentFile := theCoord.getFileIndex()
+
+	for toRank, toFile := currentRank+1, currentFile+1; toRank < 8 && toFile < 8; toRank, toFile = toRank+1, toFile+1 {
+		toCoord, _ := coordinateFromRankFileIndices(toRank, toFile)
+		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
+		if deadEnd {
+			break
+		}
+	}
+	for toRank, toFile := currentRank+1, currentFile-1; toRank < 8 && toFile >= 0; toRank, toFile = toRank+1, toFile-1 {
+		toCoord, _ := coordinateFromRankFileIndices(toRank, toFile)
+		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
+		if deadEnd {
+			break
+		}
+	}
+	for toRank, toFile := currentRank-1, currentFile+1; toRank >= 0 && toFile < 8; toRank, toFile = toRank-1, toFile+1 {
+		toCoord, _ := coordinateFromRankFileIndices(toRank, toFile)
+		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
+		if deadEnd {
+			break
+		}
+	}
+	for toRank, toFile := currentRank-1, currentFile-1; toRank >= 0 && toFile >= 0; toRank, toFile = toRank-1, toFile-1 {
+		toCoord, _ := coordinateFromRankFileIndices(toRank, toFile)
+		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
+		if deadEnd {
+			break
+		}
+	}
+
+	return moves
+}
+
+func (p Position) processLongRangePieceMovesUntilDeadEnd(currentCoord, toCoord coordinate, moves *moveList) (deadEnd bool) {
+	toSquareState := p.board[toCoord]
+	if toSquareState != empty && toSquareState.getColour() == p.activeColour {
+		return true
+	}
+	moves.addMove(currentCoord, toCoord, empty)
+	if toSquareState != empty {
+		return true
+	}
+	return false
 }
 
 func (p *Position) MakeMove(theMove move) error {
@@ -256,26 +440,6 @@ func (p *Position) makePseudoMove(theMove move) (resultsInCheck bool) {
 	return resultsInCheck
 }
 
-func (p *Position) setSquare(theCoord coordinate, theState squareState) {
-	p.board[theCoord] = theState
-
-	if theState == empty {
-		p.colourMasks[white].clear(theCoord)
-		p.colourMasks[black].clear(theCoord)
-
-		for thePieceType := king; thePieceType <= pawn; thePieceType++ {
-			p.pieceTypeMasks[thePieceType].clear(theCoord)
-		}
-		return
-	}
-
-	thePieceType := theState.getPieceType()
-	theColour := theState.getColour()
-
-	if thePieceType == king {
-		p.kingSquares[theColour] = theCoord
-	}
-
-	p.colourMasks[theColour].set(theCoord)
-	p.pieceTypeMasks[thePieceType].set(theCoord)
+func (p Position) occupiedMask() bitBoard {
+	return p.occupationByColour[white] | p.occupationByColour[black]
 }
