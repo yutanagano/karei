@@ -17,7 +17,6 @@ type Position struct {
 	halfMoveClock          uint8
 }
 
-type squareState uint8
 type castlingRights uint8
 type colour uint8
 type pieceType uint8
@@ -25,22 +24,6 @@ type pieceType uint8
 const (
 	white colour = 0
 	black colour = 1
-)
-
-const (
-	whiteKing squareState = iota
-	blackKing
-	whiteQueen
-	blackQueen
-	whiteRook
-	blackRook
-	whiteBishop
-	blackBishop
-	whiteKnight
-	blackKnight
-	whitePawn
-	blackPawn
-	empty
 )
 
 const (
@@ -204,62 +187,6 @@ func (p *Position) setSquare(state squareState, coord coordinate) {
 
 func (p *Position) newGame() {
 	// TODO: set up starting position
-}
-
-func squareStateFromRune(char rune) (squareState, error) {
-	switch char {
-	case 'K':
-		return whiteKing, nil
-	case 'Q':
-		return whiteQueen, nil
-	case 'R':
-		return whiteRook, nil
-	case 'B':
-		return whiteBishop, nil
-	case 'N':
-		return whiteKnight, nil
-	case 'P':
-		return whitePawn, nil
-	case 'k':
-		return blackKing, nil
-	case 'q':
-		return blackQueen, nil
-	case 'r':
-		return blackRook, nil
-	case 'b':
-		return blackBishop, nil
-	case 'n':
-		return blackKnight, nil
-	case 'p':
-		return blackPawn, nil
-	default:
-		err := fmt.Errorf("Unrecognized piece: %c", char)
-		return empty, err
-	}
-}
-
-func (s squareState) getPieceType() pieceType {
-	switch s / 6 {
-	case 0:
-		return king
-	case 1:
-		return queen
-	case 2:
-		return rook
-	case 3:
-		return bishop
-	case 4:
-		return knight
-	default:
-		return pawn
-	}
-}
-
-func (s squareState) getColour() colour {
-	if s%2 == 0 {
-		return white
-	}
-	return black
 }
 
 func parseMoves(tokens *[]string) {

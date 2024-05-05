@@ -30,11 +30,11 @@ func MoveFromString(s string) (Move, error) {
 	}
 
 	if strLen == 5 {
-		if r := toSquare.getRankIndex(); !(r == 1 || r == 8) {
+		if r := toSquare.getRankIndex(); !(r == 0 || r == 7) {
 			return result, fmt.Errorf("cannot promote on rank %v: %s", r, s)
 		}
 
-		promotion, err = squareStateFromRune(rune(s[5]))
+		promotion, err = squareStateFromRune(rune(s[4]))
 		if err != nil {
 			return result, err
 		}
@@ -48,5 +48,9 @@ func MoveFromString(s string) (Move, error) {
 }
 
 func (m Move) ToString() string {
+	if m.Promotion != empty {
+		return m.From.toString() + m.To.toString() + string(m.Promotion.toRune())
+	}
+
 	return m.From.toString() + m.To.toString()
 }
