@@ -1,8 +1,12 @@
 package chess
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 type coordinate uint8
+type offset struct{ rankOffset, fileOffset int8 }
 
 const (
 	a1 coordinate = iota
@@ -236,4 +240,15 @@ func (c coordinate) getRankIndex() int8 {
 
 func (c coordinate) getFileIndex() int8 {
 	return int8(c) % 8
+}
+
+func (c coordinate) move(theOffset offset) (coordinate, error) {
+	newRank := c.getRankIndex() + theOffset.rankOffset
+	newFile := c.getFileIndex() + theOffset.fileOffset
+
+	if newRank < 0 || newRank >= 8 || newFile < 0 || newFile >= 8 {
+		return nullCoordinate, errors.New("out of bounds")
+	}
+
+	return coordinate(newRank*8 + newFile), nil
 }

@@ -2,6 +2,7 @@ package chess
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 )
 
@@ -16,6 +17,7 @@ type Position struct {
 	activeColour           colour
 	pieceColourTypeCounter [12]int
 	halfMoveClock          uint8
+	legalMoves             moveList
 }
 
 func (p *Position) LoadFEN(f FEN) error {
@@ -68,19 +70,19 @@ func (p *Position) LoadFEN(f FEN) error {
 	default:
 		for _, theRune := range f.CastlingRights {
 			if theRune == 'K' {
-				p.castlingRights |= whiteCastleKingSide
+				p.castlingRights.turnOn(whiteCastleKingSide)
 				continue
 			}
 			if theRune == 'Q' {
-				p.castlingRights |= whiteCastleQueenSide
+				p.castlingRights.turnOn(whiteCastleQueenSide)
 				continue
 			}
 			if theRune == 'k' {
-				p.castlingRights |= blackCastleKingSide
+				p.castlingRights.turnOn(blackCastleKingSide)
 				continue
 			}
 			if theRune == 'q' {
-				p.castlingRights |= blackCastleQueenSide
+				p.castlingRights.turnOn(blackCastleQueenSide)
 				continue
 			}
 
@@ -108,6 +110,8 @@ func (p *Position) LoadFEN(f FEN) error {
 	}
 	p.halfMoveClock = uint8(hmcInt)
 
+	p.doStaticAnalysis()
+
 	return nil
 }
 
@@ -134,17 +138,18 @@ func (p *Position) clear() {
 		p.pieceColourTypeCounter[idx] = 0
 	}
 	p.halfMoveClock = 0
+	p.legalMoves = moveList{}
 }
 
 func (p *Position) setSquare(theCoord coordinate, theState squareState) {
 	p.board[theCoord] = theState
 
 	if theState == empty {
-		p.occupationByColour[white].clear(theCoord)
-		p.occupationByColour[black].clear(theCoord)
+		p.occupationByColour[white].turnOff(theCoord)
+		p.occupationByColour[black].turnOff(theCoord)
 
 		for thePieceType := king; thePieceType <= pawn; thePieceType++ {
-			p.occupationByPieceType[thePieceType].clear(theCoord)
+			p.occupationByPieceType[thePieceType].turnOff(theCoord)
 		}
 		return
 	}
@@ -156,192 +161,136 @@ func (p *Position) setSquare(theCoord coordinate, theState squareState) {
 		p.kingSquares[theColour] = theCoord
 	}
 
-	p.occupationByColour[theColour].set(theCoord)
-	p.occupationByPieceType[thePieceType].set(theCoord)
+	p.occupationByColour[theColour].turnOn(theCoord)
+	p.occupationByPieceType[thePieceType].turnOn(theCoord)
 }
 
-func (p Position) getPseudoLegalMoves() moveList {
-	pseudoLegalMoves := moveList{}
+func (p *Position) doStaticAnalysis() {
+	var legalMoves moveList
 
-	pseudoLegalMoves = append(pseudoLegalMoves, p.getPseudoLegalKingMoves()...)
-	pseudoLegalMoves = append(pseudoLegalMoves, p.getPseudoLegalQueenMoves()...)
-	pseudoLegalMoves = append(pseudoLegalMoves, p.getPseudoLegalRookMoves()...)
-	pseudoLegalMoves = append(pseudoLegalMoves, p.getPseudoLegalBishopMoves()...)
-	// pseudoLegalMoves = append(pseudoLegalMoves, p.getPseudoLegalKnightMoves()...)
-	// pseudoLegalMoves = append(pseudoLegalMoves, p.getPseudoLegalPawnMoves()...)
+	p.surveyControlledSquares(p.activeColour.getOpposite(), false)
+	legalMoves = p.surveyControlledSquares(p.activeColour, true)
 
-	return pseudoLegalMoves
+	p.legalMoves = legalMoves
 }
 
-func (p Position) getPseudoLegalKingMoves() moveList {
-	moves := moveList{}
+func (p *Position) surveyControlledSquares(player colour, getMoveCandidates bool) moveList {
+	moveCandidates := moveList{}
 
-	currentCoord := p.kingSquares[p.activeColour]
-	currentRank := currentCoord.getRankIndex()
-	currentFile := currentCoord.getFileIndex()
+	p.surveyKingControl(player, getMoveCandidates, &moveCandidates)
+	p.surveyQueenControl(player, getMoveCandidates, &moveCandidates)
+	p.surveyRookControl(player, getMoveCandidates, &moveCandidates)
+	p.surveyBishopControl(player, getMoveCandidates, &moveCandidates)
+	// p.surveyKnightControl(player, getMoveCandidates, &moveCandidates)
+	// p.surveyPawnControl(player, getMoveCandidates, &moveCandidates)
 
-	isLegalDestination := func(toCoord coordinate) bool {
-		toSquareState := p.board[toCoord]
-		if toSquareState != empty && toSquareState.getColour() == p.activeColour {
-			return false
+	return moveCandidates
+}
+
+func (p *Position) surveyKingControl(player colour, getMoveCandidates bool, moveCandidates *moveList) {
+	currentCoord := p.kingSquares[player]
+
+	for _, theOffset := range []offset{
+		{1, 0},
+		{1, 1},
+		{0, 1},
+		{-1, 1},
+		{-1, 0},
+		{-1, -1},
+		{0, -1},
+		{1, -1},
+	} {
+		toCoord, err := currentCoord.move(theOffset)
+		if err != nil {
+			continue
 		}
-		return true
-	}
-
-	for _, rankOffset := range []int8{-1, 0, 1} {
-		for _, fileOffset := range []int8{-1, 0, 1} {
-			if rankOffset == 0 && fileOffset == 0 {
-				continue
-			}
-			toCoord, err := coordinateFromRankFileIndices(currentRank+rankOffset, currentFile+fileOffset)
-			if err != nil {
-				continue
-			}
-			if !isLegalDestination(toCoord) {
-				continue
-			}
-			moves.addMove(currentCoord, toCoord, empty)
+		p.controlByColour[player].turnOn(toCoord)
+		if getMoveCandidates && !p.isAttackedByEnemy(player, toCoord) && !p.isOccupiedByFriendly(player, toCoord) {
+			moveCandidates.addMove(currentCoord, toCoord, empty)
 		}
 	}
-
-	return moves
 }
 
-func (p Position) getPseudoLegalQueenMoves() moveList {
-	moves := moveList{}
-
-	queensBitBoard := p.occupationByColour[p.activeColour] & p.occupationByPieceType[queen]
-
+func (p *Position) surveyQueenControl(player colour, getMoveCandidates bool, moveCandidates *moveList) {
+	queensBitBoard := p.occupationByColour[player] & p.occupationByPieceType[queen]
 	for {
 		currentCoord, ok := queensBitBoard.pop()
 		if !ok {
 			break
 		}
-		moves = append(moves, p.getPseudoLegalRookMovesFromCoordinate(currentCoord)...)
-		moves = append(moves, p.getPseudoLegalBishopMovesFromCoordinate(currentCoord)...)
-	}
 
-	return moves
+		for _, theOffset := range []offset{
+			{1, 0},
+			{1, 1},
+			{0, 1},
+			{-1, 1},
+			{-1, 0},
+			{-1, -1},
+			{0, -1},
+			{1, -1},
+		} {
+			p.surveySlidingControlFromCoordinate(currentCoord, theOffset, player, getMoveCandidates, moveCandidates)
+		}
+	}
 }
 
-func (p Position) getPseudoLegalRookMoves() moveList {
-	moves := moveList{}
-
-	rooksBitBoard := p.occupationByColour[p.activeColour] & p.occupationByPieceType[rook]
-
+func (p *Position) surveyRookControl(player colour, getMoveCandidates bool, moveCandidates *moveList) {
+	rooksBitBoard := p.occupationByColour[player] & p.occupationByPieceType[rook]
 	for {
 		currentCoord, ok := rooksBitBoard.pop()
 		if !ok {
 			break
 		}
-		moves = append(moves, p.getPseudoLegalRookMovesFromCoordinate(currentCoord)...)
-	}
 
-	return moves
+		for _, theOffset := range []offset{
+			{1, 0},
+			{0, 1},
+			{-1, 0},
+			{0, -1},
+		} {
+			p.surveySlidingControlFromCoordinate(currentCoord, theOffset, player, getMoveCandidates, moveCandidates)
+		}
+	}
 }
 
-func (p Position) getPseudoLegalBishopMoves() moveList {
-	moves := moveList{}
-
-	bishopsBitBoard := p.occupationByColour[p.activeColour] & p.occupationByPieceType[bishop]
-
+func (p *Position) surveyBishopControl(player colour, getMoveCandidates bool, moveCandidates *moveList) {
+	bishopsBitBoard := p.occupationByColour[player] & p.occupationByPieceType[bishop]
 	for {
 		currentCoord, ok := bishopsBitBoard.pop()
 		if !ok {
 			break
 		}
-		moves = append(moves, p.getPseudoLegalBishopMovesFromCoordinate(currentCoord)...)
-	}
 
-	return moves
+		for _, theOffset := range []offset{
+			{1, 1},
+			{-1, 1},
+			{-1, -1},
+			{1, -1},
+		} {
+			p.surveySlidingControlFromCoordinate(currentCoord, theOffset, player, getMoveCandidates, moveCandidates)
+		}
+	}
 }
 
-func (p Position) getPseudoLegalRookMovesFromCoordinate(theCoord coordinate) moveList {
-	moves := moveList{}
-
-	currentRank := theCoord.getRankIndex()
-	currentFile := theCoord.getFileIndex()
-
-	for toRank := currentRank + 1; toRank < 8; toRank++ {
-		toCoord, _ := coordinateFromRankFileIndices(toRank, currentFile)
-		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
-		if deadEnd {
+func (p *Position) surveySlidingControlFromCoordinate(originalCoord coordinate, theOffset offset, player colour, getMoveCandidates bool, moveCandidates *moveList) {
+	for toCoord, err := originalCoord.move(theOffset); err == nil; toCoord, err = toCoord.move(theOffset) {
+		log.Printf("here with %v and err %v\n", toCoord, err)
+		p.controlByColour[player].turnOn(toCoord)
+		if getMoveCandidates && !p.isOccupiedByFriendly(player, toCoord) {
+			moveCandidates.addMove(originalCoord, toCoord, empty)
+		}
+		if p.board[toCoord] != empty {
 			break
 		}
 	}
-	for toRank := currentRank - 1; toRank >= 0; toRank-- {
-		toCoord, _ := coordinateFromRankFileIndices(toRank, currentFile)
-		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
-		if deadEnd {
-			break
-		}
-	}
-	for toFile := currentFile + 1; toFile < 8; toFile++ {
-		toCoord, _ := coordinateFromRankFileIndices(currentRank, toFile)
-		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
-		if deadEnd {
-			break
-		}
-	}
-	for toFile := currentFile - 1; toFile >= 0; toFile-- {
-		toCoord, _ := coordinateFromRankFileIndices(currentRank, toFile)
-		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
-		if deadEnd {
-			break
-		}
-	}
-
-	return moves
 }
 
-func (p Position) getPseudoLegalBishopMovesFromCoordinate(theCoord coordinate) moveList {
-	moves := moveList{}
-
-	currentRank := theCoord.getRankIndex()
-	currentFile := theCoord.getFileIndex()
-
-	for toRank, toFile := currentRank+1, currentFile+1; toRank < 8 && toFile < 8; toRank, toFile = toRank+1, toFile+1 {
-		toCoord, _ := coordinateFromRankFileIndices(toRank, toFile)
-		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
-		if deadEnd {
-			break
-		}
-	}
-	for toRank, toFile := currentRank+1, currentFile-1; toRank < 8 && toFile >= 0; toRank, toFile = toRank+1, toFile-1 {
-		toCoord, _ := coordinateFromRankFileIndices(toRank, toFile)
-		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
-		if deadEnd {
-			break
-		}
-	}
-	for toRank, toFile := currentRank-1, currentFile+1; toRank >= 0 && toFile < 8; toRank, toFile = toRank-1, toFile+1 {
-		toCoord, _ := coordinateFromRankFileIndices(toRank, toFile)
-		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
-		if deadEnd {
-			break
-		}
-	}
-	for toRank, toFile := currentRank-1, currentFile-1; toRank >= 0 && toFile >= 0; toRank, toFile = toRank-1, toFile-1 {
-		toCoord, _ := coordinateFromRankFileIndices(toRank, toFile)
-		deadEnd := p.processLongRangePieceMovesUntilDeadEnd(theCoord, toCoord, &moves)
-		if deadEnd {
-			break
-		}
-	}
-
-	return moves
+func (p Position) isAttackedByEnemy(player colour, theCoord coordinate) bool {
+	return p.controlByColour[player.getOpposite()].get(theCoord)
 }
 
-func (p Position) processLongRangePieceMovesUntilDeadEnd(currentCoord, toCoord coordinate, moves *moveList) (deadEnd bool) {
-	toSquareState := p.board[toCoord]
-	if toSquareState != empty && toSquareState.getColour() == p.activeColour {
-		return true
-	}
-	moves.addMove(currentCoord, toCoord, empty)
-	if toSquareState != empty {
-		return true
-	}
-	return false
+func (p Position) isOccupiedByFriendly(player colour, theCoord coordinate) bool {
+	return p.occupationByColour[player].get(theCoord)
 }
 
 func (p *Position) MakeMove(theMove move) error {

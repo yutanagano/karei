@@ -95,7 +95,6 @@ func TestGetPseudoLegalMoves(t *testing.T) {
 	thePosition := Position{}
 	thePosition.LoadFEN(operaGame)
 
-	plm := thePosition.getPseudoLegalMoves()
 	expectedNumMoves := 41
 	expected := moveList{
 		{d1, d6, empty},
@@ -108,12 +107,12 @@ func TestGetPseudoLegalMoves(t *testing.T) {
 		{c1, d2, empty},
 	}
 
-	if numMoves := len(plm); numMoves != expectedNumMoves {
+	if numMoves := len(thePosition.legalMoves); numMoves != expectedNumMoves {
 		t.Errorf("expected %v moves, got %v", expectedNumMoves, numMoves)
 	}
 
 	for _, m := range expected {
-		if !plm.contains(m) {
+		if !thePosition.legalMoves.contains(m) {
 			t.Errorf("expected move %v that was not generated", m)
 		}
 	}

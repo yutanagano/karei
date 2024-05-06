@@ -5,17 +5,7 @@ import (
 	"testing"
 )
 
-func TestSet(t *testing.T) {
-	theBitBoard := bitBoard(0)
-	theBitBoard.set(e4)
-	expected := bitBoard(1 << e4)
-
-	if theBitBoard != expected {
-		t.Errorf("expected %v, got %v", expected, theBitBoard)
-	}
-}
-
-func TestGet(t *testing.T) {
+func TestBitBoardGet(t *testing.T) {
 	theBitBoard := bitBoard(1 << c6)
 
 	if theBitBoard.get(c6) != true {
@@ -27,9 +17,19 @@ func TestGet(t *testing.T) {
 	}
 }
 
-func TestClear(t *testing.T) {
+func TestBitBoardTurnOn(t *testing.T) {
+	theBitBoard := bitBoard(0)
+	theBitBoard.turnOn(e4)
+	expected := bitBoard(1 << e4)
+
+	if theBitBoard != expected {
+		t.Errorf("expected %v, got %v", expected, theBitBoard)
+	}
+}
+
+func TestBitBoardTurnOff(t *testing.T) {
 	theBitBoard := bitBoard(1 << d5)
-	theBitBoard.clear(d5)
+	theBitBoard.turnOff(d5)
 
 	if theBitBoard != 0 {
 		t.Errorf("the d5 square should be cleared")
