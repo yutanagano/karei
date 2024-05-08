@@ -188,23 +188,20 @@ func (p *Position) surveyControlledSquares(player colour, getMoveCandidates bool
 
 func (p *Position) surveyKingControl(player colour, getMoveCandidates bool, moveCandidates *moveList) {
 	currentCoord := p.kingSquares[player]
+	controlledSquares := kingControlFrom[currentCoord]
+	p.controlByColour[player] |= controlledSquares
 
-	for _, theOffset := range []offset{
-		{1, 0},
-		{1, 1},
-		{0, 1},
-		{-1, 1},
-		{-1, 0},
-		{-1, -1},
-		{0, -1},
-		{1, -1},
-	} {
-		toCoord, err := currentCoord.move(theOffset)
-		if err != nil {
-			continue
+	if !getMoveCandidates {
+		return
+	}
+
+	for {
+		toCoord, ok := controlledSquares.pop()
+		if !ok {
+			break
 		}
-		p.controlByColour[player].turnOn(toCoord)
-		if getMoveCandidates && !p.isAttackedByEnemy(player, toCoord) && !p.isOccupiedByFriendly(player, toCoord) {
+
+		if !p.isAttackedByEnemy(player, toCoord) && !p.isOccupiedByFriendly(player, toCoord) {
 			moveCandidates.addMove(currentCoord, toCoord, empty)
 		}
 	}
