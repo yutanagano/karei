@@ -92,6 +92,7 @@ func TestLoadFEN(t *testing.T) {
 }
 
 func TestGetPseudoLegalMoves(t *testing.T) {
+	// TODO test from another position to look at knights, pawns, castling and en-passant
 	thePosition := Position{}
 	thePosition.LoadFEN(operaGame)
 
