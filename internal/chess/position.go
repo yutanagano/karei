@@ -167,7 +167,7 @@ func (p *Position) setSquare(theCoord coordinate, theState squareState) {
 func (p *Position) doStaticAnalysis() {
 	var legalMoves moveList
 
-	p.surveyControlledSquares(p.activeColour.getOpposite(), false)
+	p.surveyControlledSquares(p.activeColour.getOpponent(), false)
 	legalMoves = p.surveyControlledSquares(p.activeColour, true)
 
 	p.legalMoves = legalMoves
@@ -180,7 +180,7 @@ func (p *Position) surveyControlledSquares(player colour, getMoveCandidates bool
 	p.surveyQueenControl(player, getMoveCandidates, &moveCandidates)
 	p.surveyRookControl(player, getMoveCandidates, &moveCandidates)
 	p.surveyBishopControl(player, getMoveCandidates, &moveCandidates)
-	// p.surveyKnightControl(player, getMoveCandidates, &moveCandidates)
+	p.surveyKnightControl(player, getMoveCandidates, &moveCandidates)
 	// p.surveyPawnControl(player, getMoveCandidates, &moveCandidates)
 
 	return moveCandidates
@@ -280,8 +280,37 @@ func (p *Position) surveySlidingControlFromCoordinate(originalCoord coordinate, 
 	}
 }
 
+func (p *Position) surveyKnightControl(player colour, getMoveCandidates bool, moveCandidates *moveList) {
+	knightsBitBoard := p.occupationByColour[player] & p.occupationByPieceType[knight]
+
+	for {
+		currentCoord, ok := knightsBitBoard.pop()
+		if !ok {
+			break
+		}
+
+		controlledSquares := knightControlFrom[currentCoord]
+		p.controlByColour[player] |= controlledSquares
+
+		if !getMoveCandidates {
+			return
+		}
+
+		for {
+			toCoord, ok := controlledSquares.pop()
+			if !ok {
+				break
+			}
+
+			if !p.isAttackedByEnemy(player, toCoord) && !p.isOccupiedByFriendly(player, toCoord) {
+				moveCandidates.addMove(currentCoord, toCoord, empty)
+			}
+		}
+	}
+}
+
 func (p Position) isAttackedByEnemy(player colour, theCoord coordinate) bool {
-	return p.controlByColour[player.getOpposite()].get(theCoord)
+	return p.controlByColour[player.getOpponent()].get(theCoord)
 }
 
 func (p Position) isOccupiedByFriendly(player colour, theCoord coordinate) bool {
@@ -376,7 +405,7 @@ func (p *Position) makePseudoMove(theMove move) (resultsInCheck bool) {
 		p.setSquare(theMove.To, fromSquareState)
 	}
 
-	p.activeColour = p.activeColour.getOpposite()
+	p.activeColour = p.activeColour.getOpponent()
 
 	// TODO check if the player who moved is now in check
 	resultsInCheck = false

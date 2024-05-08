@@ -17,7 +17,7 @@ const (
 	pawn
 )
 
-func (c colour) getOpposite() colour {
+func (c colour) getOpponent() colour {
 	if c == white {
 		return black
 	}
