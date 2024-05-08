@@ -2,7 +2,6 @@ package chess
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 )
 
@@ -272,9 +271,8 @@ func (p *Position) surveyBishopControl(player colour, getMoveCandidates bool, mo
 	}
 }
 
-func (p *Position) surveySlidingControlFromCoordinate(originalCoord coordinate, theOffset offset, player colour, getMoveCandidates bool, moveCandidates *moveList) {
-	for toCoord, err := originalCoord.move(theOffset); err == nil; toCoord, err = toCoord.move(theOffset) {
-		log.Printf("here with %v and err %v\n", toCoord, err)
+func (p *Position) surveySlidingControlFromCoordinate(originalCoord coordinate, unitOffset offset, player colour, getMoveCandidates bool, moveCandidates *moveList) {
+	for toCoord, err := originalCoord.move(unitOffset); err == nil; toCoord, err = toCoord.move(unitOffset) {
 		p.controlByColour[player].turnOn(toCoord)
 		if getMoveCandidates && !p.isOccupiedByFriendly(player, toCoord) {
 			moveCandidates.addMove(originalCoord, toCoord, empty)
