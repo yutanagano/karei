@@ -205,6 +205,70 @@ func (p *Position) surveyKingControl(player colour, getMoveCandidates bool, move
 			moveCandidates.addMove(currentCoord, toCoord, empty)
 		}
 	}
+
+	if p.inCheck(player) {
+		return
+	}
+
+	switch player {
+	case white:
+		if p.castlingRights.isSet(whiteCastleKingSide) && p.allowsSafePassage(white, f1) && p.allowsSafePassage(white, g1) {
+			moveCandidates.addMove(e1, g1, empty)
+		}
+		if p.castlingRights.isSet(whiteCastleQueenSide) && p.allowsSafePassage(white, d1) && p.allowsSafePassage(white, c1) {
+			moveCandidates.addMove(e1, c1, empty)
+		}
+	case black:
+		if p.castlingRights.isSet(blackCastleKingSide) && p.allowsSafePassage(black, f8) && p.allowsSafePassage(black, g8) {
+			moveCandidates.addMove(e8, g8, empty)
+		}
+		if p.castlingRights.isSet(blackCastleQueenSide) && p.allowsSafePassage(black, d8) && p.allowsSafePassage(black, c8) {
+			moveCandidates.addMove(e8, c8, empty)
+		}
+	}
+}
+
+func (p *Position) currentPlayerCanCastleNow() (canCastleKingSide bool, canCastleQueenSide bool) {
+	if p.inCheck(p.activeColour) {
+		return false, false
+	}
+
+	switch p.activeColour {
+	case white:
+		if !p.castlingRights.isSet(whiteCastleKingSide) {
+			canCastleKingSide = false
+		} else {
+			pathIsClear := !p.isOccupiedByFriendly(white, f1) && !p.isOccupiedByFriendly(white, g1)
+			pathIsSafe := !p.isAttackedByEnemy(white, f1) && !p.isAttackedByEnemy(white, g1)
+			canCastleKingSide = pathIsClear && pathIsSafe
+		}
+
+		if !p.castlingRights.isSet(whiteCastleQueenSide) {
+			canCastleQueenSide = false
+		} else {
+			pathIsClear := !p.isOccupiedByFriendly(white, d1) && !p.isOccupiedByFriendly(white, c1)
+			pathIsSafe := !p.isAttackedByEnemy(white, d1) && !p.isAttackedByEnemy(white, c1)
+			canCastleQueenSide = pathIsClear && pathIsSafe
+		}
+	case black:
+		if !p.castlingRights.isSet(blackCastleKingSide) {
+			canCastleKingSide = false
+		} else {
+			pathIsClear := !p.isOccupiedByFriendly(black, f8) && !p.isOccupiedByFriendly(black, g8)
+			pathIsSafe := !p.isAttackedByEnemy(black, f8) && !p.isAttackedByEnemy(black, g8)
+			canCastleKingSide = pathIsClear && pathIsSafe
+		}
+
+		if !p.castlingRights.isSet(blackCastleQueenSide) {
+			canCastleQueenSide = false
+		} else {
+			pathIsClear := !p.isOccupiedByFriendly(black, d8) && !p.isOccupiedByFriendly(black, c8)
+			pathIsSafe := !p.isAttackedByEnemy(black, d8) && !p.isAttackedByEnemy(black, c8)
+			canCastleQueenSide = pathIsClear && pathIsSafe
+		}
+	}
+
+	return canCastleKingSide, canCastleQueenSide
 }
 
 func (p *Position) surveyQueenControl(player colour, getMoveCandidates bool, moveCandidates *moveList) {
@@ -468,12 +532,20 @@ func (p *Position) surveyPawnControlBlack(getMoveCandidates bool, moveCandidates
 	}
 }
 
+func (p Position) inCheck(player colour) bool {
+	return p.isAttackedByEnemy(player, p.kingSquares[player])
+}
+
 func (p Position) isAttackedByEnemy(player colour, theCoord coordinate) bool {
 	return p.controlByColour[player.getOpponent()].get(theCoord)
 }
 
 func (p Position) isOccupiedByFriendly(player colour, theCoord coordinate) bool {
 	return p.occupationByColour[player].get(theCoord)
+}
+
+func (p Position) allowsSafePassage(player colour, theCoord coordinate) bool {
+	return !p.getOccupationBitBoard().get(theCoord) && !p.isAttackedByEnemy(player, theCoord)
 }
 
 func (p Position) getOccupationBitBoard() bitBoard {
