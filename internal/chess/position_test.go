@@ -96,7 +96,7 @@ func TestGetPseudoLegalMoves(t *testing.T) {
 	thePosition := Position{}
 	thePosition.LoadFEN(operaGame)
 
-	expectedNumMoves := 41
+	expectedNumMoves := 51
 	expected := moveList{
 		{d1, d6, empty},
 		{d1, f1, empty},
@@ -106,6 +106,9 @@ func TestGetPseudoLegalMoves(t *testing.T) {
 		{b3, h3, empty},
 		{b3, f7, empty},
 		{c1, d2, empty},
+		{c2, c3, empty},
+		{c2, c4, empty},
+		{h2, h3, empty},
 	}
 
 	if numMoves := len(thePosition.legalMoves); numMoves != expectedNumMoves {

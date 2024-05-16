@@ -21,7 +21,7 @@ type Position struct {
 
 func (p *Position) LoadFEN(f FEN) error {
 	p.clear()
-	var currentRankIndex, currentFileIndex int8 = 7, 0
+	var currentFileIndex, currentRankIndex int8 = 0, 7
 	for _, currentRune := range f.BoardState {
 		if currentFileIndex > 8 {
 			return fmt.Errorf("bad FEN: overfilled row during board specification, row %v col %v", currentRankIndex, currentFileIndex)
@@ -42,7 +42,7 @@ func (p *Position) LoadFEN(f FEN) error {
 			continue
 		}
 
-		currentCoordinate, _ := coordinateFromRankFileIndices(currentRankIndex, currentFileIndex)
+		currentCoordinate, _ := coordinateFromRankFileIndices(currentFileIndex, currentRankIndex)
 		currentSquareState, err := squareStateFromRune(currentRune)
 
 		if err != nil {
@@ -181,7 +181,7 @@ func (p *Position) surveyControlledSquares(player colour, getMoveCandidates bool
 	p.surveyRookControl(player, getMoveCandidates, &moveCandidates)
 	p.surveyBishopControl(player, getMoveCandidates, &moveCandidates)
 	p.surveyKnightControl(player, getMoveCandidates, &moveCandidates)
-	// p.surveyPawnControl(player, getMoveCandidates, &moveCandidates)
+	p.surveyPawnControl(player, getMoveCandidates, &moveCandidates)
 
 	return moveCandidates
 }
@@ -215,7 +215,7 @@ func (p *Position) surveyQueenControl(player colour, getMoveCandidates bool, mov
 			break
 		}
 
-		for _, theOffset := range []offset{
+		for _, delta := range []gridDelta{
 			{1, 0},
 			{1, 1},
 			{0, 1},
@@ -225,7 +225,7 @@ func (p *Position) surveyQueenControl(player colour, getMoveCandidates bool, mov
 			{0, -1},
 			{1, -1},
 		} {
-			p.surveySlidingControlFromCoordinate(currentCoord, theOffset, player, getMoveCandidates, moveCandidates)
+			p.surveySlidingControlFromCoordinate(currentCoord, delta, player, getMoveCandidates, moveCandidates)
 		}
 	}
 }
@@ -238,7 +238,7 @@ func (p *Position) surveyRookControl(player colour, getMoveCandidates bool, move
 			break
 		}
 
-		for _, theOffset := range []offset{
+		for _, theOffset := range []gridDelta{
 			{1, 0},
 			{0, 1},
 			{-1, 0},
@@ -257,7 +257,7 @@ func (p *Position) surveyBishopControl(player colour, getMoveCandidates bool, mo
 			break
 		}
 
-		for _, theOffset := range []offset{
+		for _, theOffset := range []gridDelta{
 			{1, 1},
 			{-1, 1},
 			{-1, -1},
@@ -268,8 +268,8 @@ func (p *Position) surveyBishopControl(player colour, getMoveCandidates bool, mo
 	}
 }
 
-func (p *Position) surveySlidingControlFromCoordinate(originalCoord coordinate, unitOffset offset, player colour, getMoveCandidates bool, moveCandidates *moveList) {
-	for toCoord, err := originalCoord.move(unitOffset); err == nil; toCoord, err = toCoord.move(unitOffset) {
+func (p *Position) surveySlidingControlFromCoordinate(originalCoord coordinate, unitDelta gridDelta, player colour, getMoveCandidates bool, moveCandidates *moveList) {
+	for toCoord, err := originalCoord.move(unitDelta); err == nil; toCoord, err = toCoord.move(unitDelta) {
 		p.controlByColour[player].turnOn(toCoord)
 		if getMoveCandidates && !p.isOccupiedByFriendly(player, toCoord) {
 			moveCandidates.addMove(originalCoord, toCoord, empty)
@@ -302,10 +302,169 @@ func (p *Position) surveyKnightControl(player colour, getMoveCandidates bool, mo
 				break
 			}
 
-			if !p.isAttackedByEnemy(player, toCoord) && !p.isOccupiedByFriendly(player, toCoord) {
+			if !p.isOccupiedByFriendly(player, toCoord) {
 				moveCandidates.addMove(currentCoord, toCoord, empty)
 			}
 		}
+	}
+}
+
+func (p *Position) surveyPawnControl(player colour, getMoveCandidates bool, moveCandidates *moveList) {
+	switch player {
+	case white:
+		p.surveyPawnControlWhite(getMoveCandidates, moveCandidates)
+	case black:
+		p.surveyPawnControlBlack(getMoveCandidates, moveCandidates)
+	}
+}
+
+func (p *Position) surveyPawnControlWhite(getMoveCandidates bool, moveCandidates *moveList) {
+	pawnBitBoard := p.occupationByColour[white] & p.occupationByPieceType[pawn]
+
+	kingSideControl := (pawnBitBoard & ^fileH) << 9
+	queenSideControl := (pawnBitBoard & ^fileA) << 7
+	p.controlByColour[white] |= kingSideControl | queenSideControl
+
+	if !getMoveCandidates {
+		return
+	}
+
+	capturableSquares := p.occupationByColour[black]
+	if p.enPassantSquare != nullCoordinate {
+		capturableSquares.turnOn(p.enPassantSquare)
+	}
+
+	occupiedSquares := p.getOccupationBitBoard()
+	addWhitePawnMoves := func(from coordinate, to coordinate) {
+		if to.getRankIndex() != 7 {
+			moveCandidates.addMove(from, to, empty)
+			return
+		}
+
+		moveCandidates.addMove(from, to, whiteQueen)
+		moveCandidates.addMove(from, to, whiteRook)
+		moveCandidates.addMove(from, to, whiteBishop)
+		moveCandidates.addMove(from, to, whiteKnight)
+	}
+
+	kingSideCaptures := kingSideControl & capturableSquares
+	for {
+		toCoord, ok := kingSideCaptures.pop()
+		if !ok {
+			break
+		}
+
+		fromCoord := toCoord - 9
+		addWhitePawnMoves(fromCoord, toCoord)
+	}
+
+	queenSideCaptures := queenSideControl & capturableSquares
+	for {
+		toCoord, ok := queenSideCaptures.pop()
+		if !ok {
+			break
+		}
+
+		fromCoord := toCoord - 7
+		addWhitePawnMoves(fromCoord, toCoord)
+	}
+
+	oneSquareForward := (pawnBitBoard << 8) & ^occupiedSquares
+	twoSquaresForward := (oneSquareForward << 8) & rank4 & ^occupiedSquares
+
+	for {
+		toCoord, ok := oneSquareForward.pop()
+		if !ok {
+			break
+		}
+
+		fromCoord := toCoord - 8
+		addWhitePawnMoves(fromCoord, toCoord)
+	}
+
+	for {
+		toCoord, ok := twoSquaresForward.pop()
+		if !ok {
+			break
+		}
+
+		fromCoord := toCoord - 16
+		moveCandidates.addMove(fromCoord, toCoord, empty)
+	}
+}
+
+func (p *Position) surveyPawnControlBlack(getMoveCandidates bool, moveCandidates *moveList) {
+	pawnBitBoard := p.occupationByColour[black] & p.occupationByPieceType[pawn]
+
+	kingSideControl := (pawnBitBoard & ^fileH) >> 7
+	queenSideControl := (pawnBitBoard & ^fileA) >> 9
+	p.controlByColour[black] |= kingSideControl | queenSideControl
+
+	if !getMoveCandidates {
+		return
+	}
+
+	capturableSquares := p.occupationByColour[white]
+	if p.enPassantSquare != nullCoordinate {
+		capturableSquares.turnOn(p.enPassantSquare)
+	}
+
+	occupiedSquares := p.getOccupationBitBoard()
+	addBlackPawnMoves := func(from coordinate, to coordinate) {
+		if to.getRankIndex() != 0 {
+			moveCandidates.addMove(from, to, empty)
+			return
+		}
+
+		moveCandidates.addMove(from, to, blackQueen)
+		moveCandidates.addMove(from, to, blackRook)
+		moveCandidates.addMove(from, to, blackBishop)
+		moveCandidates.addMove(from, to, blackKnight)
+	}
+
+	kingSideCaptures := kingSideControl & capturableSquares
+	for {
+		toCoord, ok := kingSideCaptures.pop()
+		if !ok {
+			break
+		}
+
+		fromCoord := toCoord + 7
+		addBlackPawnMoves(fromCoord, toCoord)
+	}
+
+	queenSideCaptures := queenSideControl & capturableSquares
+	for {
+		toCoord, ok := queenSideCaptures.pop()
+		if !ok {
+			break
+		}
+
+		fromCoord := toCoord + 9
+		addBlackPawnMoves(fromCoord, toCoord)
+	}
+
+	oneSquareForward := (pawnBitBoard >> 8) & ^occupiedSquares
+	twoSquaresForward := (oneSquareForward >> 8) & rank5 & ^occupiedSquares
+
+	for {
+		toCoord, ok := oneSquareForward.pop()
+		if !ok {
+			break
+		}
+
+		fromCoord := toCoord + 8
+		addBlackPawnMoves(fromCoord, toCoord)
+	}
+
+	for {
+		toCoord, ok := twoSquaresForward.pop()
+		if !ok {
+			break
+		}
+
+		fromCoord := toCoord + 16
+		moveCandidates.addMove(fromCoord, toCoord, empty)
 	}
 }
 
@@ -315,6 +474,10 @@ func (p Position) isAttackedByEnemy(player colour, theCoord coordinate) bool {
 
 func (p Position) isOccupiedByFriendly(player colour, theCoord coordinate) bool {
 	return p.occupationByColour[player].get(theCoord)
+}
+
+func (p Position) getOccupationBitBoard() bitBoard {
+	return p.occupationByColour[white] | p.occupationByColour[black]
 }
 
 func (p *Position) MakeMove(theMove move) error {
@@ -411,8 +574,4 @@ func (p *Position) makePseudoMove(theMove move) (resultsInCheck bool) {
 	resultsInCheck = false
 
 	return resultsInCheck
-}
-
-func (p Position) occupiedMask() bitBoard {
-	return p.occupationByColour[white] | p.occupationByColour[black]
 }

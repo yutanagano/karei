@@ -6,6 +6,13 @@ import (
 
 type bitBoard uint64
 
+const (
+	fileA bitBoard = 0x0101010101010101
+	fileH bitBoard = 0x8080808080808080
+	rank4 bitBoard = 0x00000000FF000000
+	rank5 bitBoard = 0x000000FF00000000
+)
+
 func (b bitBoard) count() int {
 	return bits.OnesCount64(uint64(b))
 }

@@ -6,7 +6,7 @@ import (
 )
 
 type coordinate uint8
-type offset struct{ rankOffset, fileOffset int8 }
+type gridDelta struct{ fileDelta, rankDelta int8 }
 
 const (
 	a1 coordinate = iota
@@ -210,11 +210,11 @@ var coordToStringMap = map[coordinate]string{
 	h8: "h8",
 }
 
-func coordinateFromRankFileIndices(rankIndex int8, fileIndex int8) (coordinate, error) {
+func coordinateFromRankFileIndices(fileIndex int8, rankIndex int8) (coordinate, error) {
 	coordinateInt := rankIndex*8 + fileIndex
 
 	if coordinateInt < 0 || coordinateInt >= 64 {
-		return nullCoordinate, fmt.Errorf("invalid rank/file: %v/%v", rankIndex, fileIndex)
+		return nullCoordinate, fmt.Errorf("invalid file/rank: %v/%v", fileIndex, rankIndex)
 	}
 
 	return coordinate(coordinateInt), nil
@@ -234,19 +234,19 @@ func (c coordinate) toString() string {
 	return coordToStringMap[c]
 }
 
-func (c coordinate) getRankIndex() int8 {
-	return int8(c) / 8
-}
-
 func (c coordinate) getFileIndex() int8 {
 	return int8(c) % 8
 }
 
-func (c coordinate) move(theOffset offset) (coordinate, error) {
-	newRank := c.getRankIndex() + theOffset.rankOffset
-	newFile := c.getFileIndex() + theOffset.fileOffset
+func (c coordinate) getRankIndex() int8 {
+	return int8(c) / 8
+}
 
-	if newRank < 0 || newRank >= 8 || newFile < 0 || newFile >= 8 {
+func (c coordinate) move(delta gridDelta) (coordinate, error) {
+	newFile := c.getFileIndex() + delta.fileDelta
+	newRank := c.getRankIndex() + delta.rankDelta
+
+	if newFile < 0 || newFile >= 8 || newRank < 0 || newRank >= 8 {
 		return nullCoordinate, errors.New("out of bounds")
 	}
 

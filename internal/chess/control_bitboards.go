@@ -7,7 +7,7 @@ func initKingControlBitBoards() {
 	for currentSquare := a1; currentSquare <= h8; currentSquare++ {
 		controlBitBoard := bitBoard(0)
 
-		for _, o := range []offset{
+		for _, d := range []gridDelta{
 			{1, 0},
 			{1, 1},
 			{0, 1},
@@ -17,7 +17,7 @@ func initKingControlBitBoards() {
 			{0, -1},
 			{1, -1},
 		} {
-			if controlledSquare, err := currentSquare.move(o); err == nil {
+			if controlledSquare, err := currentSquare.move(d); err == nil {
 				controlBitBoard.turnOn(controlledSquare)
 			}
 		}
@@ -30,7 +30,7 @@ func initKnightControlBitBoards() {
 	for currentSquare := a1; currentSquare <= h8; currentSquare++ {
 		controlBitBoard := bitBoard(0)
 
-		for _, o := range []offset{
+		for _, d := range []gridDelta{
 			{2, -1},
 			{2, 1},
 			{1, 2},
@@ -40,7 +40,7 @@ func initKnightControlBitBoards() {
 			{1, -2},
 			{-1, -2},
 		} {
-			if controlledSquare, err := currentSquare.move(o); err == nil {
+			if controlledSquare, err := currentSquare.move(d); err == nil {
 				controlBitBoard.turnOn(controlledSquare)
 			}
 		}
