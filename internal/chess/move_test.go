@@ -38,7 +38,7 @@ func TestMoveFromString(t *testing.T) {
 	}
 }
 
-func TestToString(t *testing.T) {
+func TestMoveToString(t *testing.T) {
 	type testCase struct {
 		move     move
 		expected string
@@ -64,5 +64,60 @@ func TestToString(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.expected, func(t *testing.T) { checkCase(t, c) })
+	}
+}
+
+func TestMoveListFilter(t *testing.T) {
+	type testCase struct {
+		name         string
+		initialList  moveList
+		evaluator    func(move) bool
+		expectedList moveList
+	}
+
+	testCases := []testCase{
+		{
+			"non-promotions",
+			moveList{
+				{e2, e4, empty},
+				{d2, d4, empty},
+				{e7, e8, whiteQueen},
+				{d7, d8, whiteQueen},
+			},
+			func(theMove move) bool {
+				return theMove.Promotion == empty
+			},
+			moveList{
+				{e2, e4, empty},
+				{d2, d4, empty},
+			},
+		},
+		{
+			"from e2",
+			moveList{
+				{e2, e3, empty},
+				{e2, e4, empty},
+				{d2, d3, empty},
+				{d2, d4, empty},
+			},
+			func(theMove move) bool {
+				return theMove.From == e2
+			},
+			moveList{
+				{e2, e3, empty},
+				{e2, e4, empty},
+			},
+		},
+	}
+
+	checkCase := func(t *testing.T, c testCase) {
+		c.initialList.filter(c.evaluator)
+		if !reflect.DeepEqual(c.initialList, c.expectedList) {
+			t.Errorf("expected %v, got %v", c.expectedList, c.initialList)
+		}
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) { checkCase(t, c) })
 	}
 }

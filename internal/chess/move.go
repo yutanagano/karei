@@ -68,6 +68,19 @@ func (l *moveList) addMove(from coordinate, to coordinate, promotion squareState
 	*l = append(*l, move{from, to, promotion})
 }
 
+func (l *moveList) filter(evaluator func(move) bool) {
+	writeIndex := 0
+
+	for _, theMove := range *l {
+		if evaluator(theMove) {
+			(*l)[writeIndex] = theMove
+			writeIndex++
+		}
+	}
+
+	(*l) = (*l)[:writeIndex]
+}
+
 func (l moveList) contains(query move) bool {
 	for _, element := range l {
 		if reflect.DeepEqual(query, element) {

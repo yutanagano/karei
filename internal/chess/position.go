@@ -165,33 +165,30 @@ func (p *Position) setSquare(theCoord coordinate, theState squareState) {
 }
 
 func (p *Position) doStaticAnalysis() {
-	var legalMoves moveList
-
-	p.surveyControlledSquares(p.activeColour.getOpponent(), false)
-	legalMoves = p.surveyControlledSquares(p.activeColour, true)
-
-	p.legalMoves = legalMoves
+	p.surveyPieceActivity(p.activeColour.getOpponent(), false)
+	p.legalMoves = p.surveyPieceActivity(p.activeColour, true)
+	p.legalMoves.filter(p.isLegalMove)
 }
 
-func (p *Position) surveyControlledSquares(player colour, getMoveCandidates bool) moveList {
-	moveCandidates := moveList{}
+func (p *Position) surveyPieceActivity(player colour, getPsuedoLegalMoves bool) moveList {
+	pseudoLegalMoves := moveList{}
 
-	p.surveyKingControl(player, getMoveCandidates, &moveCandidates)
-	p.surveyQueenControl(player, getMoveCandidates, &moveCandidates)
-	p.surveyRookControl(player, getMoveCandidates, &moveCandidates)
-	p.surveyBishopControl(player, getMoveCandidates, &moveCandidates)
-	p.surveyKnightControl(player, getMoveCandidates, &moveCandidates)
-	p.surveyPawnControl(player, getMoveCandidates, &moveCandidates)
+	p.surveyKingActivity(player, getPsuedoLegalMoves, &pseudoLegalMoves)
+	p.surveyQueenActivity(player, getPsuedoLegalMoves, &pseudoLegalMoves)
+	p.surveyRookActivity(player, getPsuedoLegalMoves, &pseudoLegalMoves)
+	p.surveyBishopActivity(player, getPsuedoLegalMoves, &pseudoLegalMoves)
+	p.surveyKnightActivity(player, getPsuedoLegalMoves, &pseudoLegalMoves)
+	p.surveyPawnActivity(player, getPsuedoLegalMoves, &pseudoLegalMoves)
 
-	return moveCandidates
+	return pseudoLegalMoves
 }
 
-func (p *Position) surveyKingControl(player colour, getMoveCandidates bool, moveCandidates *moveList) {
+func (p *Position) surveyKingActivity(player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
 	currentCoord := p.kingSquares[player]
 	controlledSquares := kingControlFrom[currentCoord]
 	p.controlByColour[player] |= controlledSquares
 
-	if !getMoveCandidates {
+	if !getPsuedoLegalMoves {
 		return
 	}
 
@@ -202,7 +199,7 @@ func (p *Position) surveyKingControl(player colour, getMoveCandidates bool, move
 		}
 
 		if !p.isAttackedByEnemy(player, toCoord) && !p.isOccupiedByFriendly(player, toCoord) {
-			moveCandidates.addMove(currentCoord, toCoord, empty)
+			pseudoLegalMoves.addMove(currentCoord, toCoord, empty)
 		}
 	}
 
@@ -213,17 +210,17 @@ func (p *Position) surveyKingControl(player colour, getMoveCandidates bool, move
 	switch player {
 	case white:
 		if p.castlingRights.isSet(whiteCastleKingSide) && p.allowsSafePassage(white, f1) && p.allowsSafePassage(white, g1) {
-			moveCandidates.addMove(e1, g1, empty)
+			pseudoLegalMoves.addMove(e1, g1, empty)
 		}
 		if p.castlingRights.isSet(whiteCastleQueenSide) && p.allowsSafePassage(white, d1) && p.allowsSafePassage(white, c1) {
-			moveCandidates.addMove(e1, c1, empty)
+			pseudoLegalMoves.addMove(e1, c1, empty)
 		}
 	case black:
 		if p.castlingRights.isSet(blackCastleKingSide) && p.allowsSafePassage(black, f8) && p.allowsSafePassage(black, g8) {
-			moveCandidates.addMove(e8, g8, empty)
+			pseudoLegalMoves.addMove(e8, g8, empty)
 		}
 		if p.castlingRights.isSet(blackCastleQueenSide) && p.allowsSafePassage(black, d8) && p.allowsSafePassage(black, c8) {
-			moveCandidates.addMove(e8, c8, empty)
+			pseudoLegalMoves.addMove(e8, c8, empty)
 		}
 	}
 }
@@ -271,7 +268,7 @@ func (p *Position) currentPlayerCanCastleNow() (canCastleKingSide bool, canCastl
 	return canCastleKingSide, canCastleQueenSide
 }
 
-func (p *Position) surveyQueenControl(player colour, getMoveCandidates bool, moveCandidates *moveList) {
+func (p *Position) surveyQueenActivity(player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
 	queensBitBoard := p.occupationByColour[player] & p.occupationByPieceType[queen]
 	for {
 		currentCoord, ok := queensBitBoard.pop()
@@ -289,12 +286,12 @@ func (p *Position) surveyQueenControl(player colour, getMoveCandidates bool, mov
 			{0, -1},
 			{1, -1},
 		} {
-			p.surveySlidingControlFromCoordinate(currentCoord, delta, player, getMoveCandidates, moveCandidates)
+			p.surveySlidingControlFromCoordinate(currentCoord, delta, player, getPsuedoLegalMoves, pseudoLegalMoves)
 		}
 	}
 }
 
-func (p *Position) surveyRookControl(player colour, getMoveCandidates bool, moveCandidates *moveList) {
+func (p *Position) surveyRookActivity(player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
 	rooksBitBoard := p.occupationByColour[player] & p.occupationByPieceType[rook]
 	for {
 		currentCoord, ok := rooksBitBoard.pop()
@@ -308,12 +305,12 @@ func (p *Position) surveyRookControl(player colour, getMoveCandidates bool, move
 			{-1, 0},
 			{0, -1},
 		} {
-			p.surveySlidingControlFromCoordinate(currentCoord, theOffset, player, getMoveCandidates, moveCandidates)
+			p.surveySlidingControlFromCoordinate(currentCoord, theOffset, player, getPsuedoLegalMoves, pseudoLegalMoves)
 		}
 	}
 }
 
-func (p *Position) surveyBishopControl(player colour, getMoveCandidates bool, moveCandidates *moveList) {
+func (p *Position) surveyBishopActivity(player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
 	bishopsBitBoard := p.occupationByColour[player] & p.occupationByPieceType[bishop]
 	for {
 		currentCoord, ok := bishopsBitBoard.pop()
@@ -327,16 +324,16 @@ func (p *Position) surveyBishopControl(player colour, getMoveCandidates bool, mo
 			{-1, -1},
 			{1, -1},
 		} {
-			p.surveySlidingControlFromCoordinate(currentCoord, theOffset, player, getMoveCandidates, moveCandidates)
+			p.surveySlidingControlFromCoordinate(currentCoord, theOffset, player, getPsuedoLegalMoves, pseudoLegalMoves)
 		}
 	}
 }
 
-func (p *Position) surveySlidingControlFromCoordinate(originalCoord coordinate, unitDelta gridDelta, player colour, getMoveCandidates bool, moveCandidates *moveList) {
+func (p *Position) surveySlidingControlFromCoordinate(originalCoord coordinate, unitDelta gridDelta, player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
 	for toCoord, err := originalCoord.move(unitDelta); err == nil; toCoord, err = toCoord.move(unitDelta) {
 		p.controlByColour[player].turnOn(toCoord)
-		if getMoveCandidates && !p.isOccupiedByFriendly(player, toCoord) {
-			moveCandidates.addMove(originalCoord, toCoord, empty)
+		if getPsuedoLegalMoves && !p.isOccupiedByFriendly(player, toCoord) {
+			pseudoLegalMoves.addMove(originalCoord, toCoord, empty)
 		}
 		if p.board[toCoord] != empty {
 			break
@@ -344,7 +341,7 @@ func (p *Position) surveySlidingControlFromCoordinate(originalCoord coordinate, 
 	}
 }
 
-func (p *Position) surveyKnightControl(player colour, getMoveCandidates bool, moveCandidates *moveList) {
+func (p *Position) surveyKnightActivity(player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
 	knightsBitBoard := p.occupationByColour[player] & p.occupationByPieceType[knight]
 
 	for {
@@ -356,7 +353,7 @@ func (p *Position) surveyKnightControl(player colour, getMoveCandidates bool, mo
 		controlledSquares := knightControlFrom[currentCoord]
 		p.controlByColour[player] |= controlledSquares
 
-		if !getMoveCandidates {
+		if !getPsuedoLegalMoves {
 			return
 		}
 
@@ -367,29 +364,29 @@ func (p *Position) surveyKnightControl(player colour, getMoveCandidates bool, mo
 			}
 
 			if !p.isOccupiedByFriendly(player, toCoord) {
-				moveCandidates.addMove(currentCoord, toCoord, empty)
+				pseudoLegalMoves.addMove(currentCoord, toCoord, empty)
 			}
 		}
 	}
 }
 
-func (p *Position) surveyPawnControl(player colour, getMoveCandidates bool, moveCandidates *moveList) {
+func (p *Position) surveyPawnActivity(player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
 	switch player {
 	case white:
-		p.surveyPawnControlWhite(getMoveCandidates, moveCandidates)
+		p.surveyPawnActivityWhite(getPsuedoLegalMoves, pseudoLegalMoves)
 	case black:
-		p.surveyPawnControlBlack(getMoveCandidates, moveCandidates)
+		p.surveyPawnActivityBlack(getPsuedoLegalMoves, pseudoLegalMoves)
 	}
 }
 
-func (p *Position) surveyPawnControlWhite(getMoveCandidates bool, moveCandidates *moveList) {
+func (p *Position) surveyPawnActivityWhite(getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
 	pawnBitBoard := p.occupationByColour[white] & p.occupationByPieceType[pawn]
 
 	kingSideControl := (pawnBitBoard & ^fileH) << 9
 	queenSideControl := (pawnBitBoard & ^fileA) << 7
 	p.controlByColour[white] |= kingSideControl | queenSideControl
 
-	if !getMoveCandidates {
+	if !getPsuedoLegalMoves {
 		return
 	}
 
@@ -401,14 +398,14 @@ func (p *Position) surveyPawnControlWhite(getMoveCandidates bool, moveCandidates
 	occupiedSquares := p.getOccupationBitBoard()
 	addWhitePawnMoves := func(from coordinate, to coordinate) {
 		if to.getRankIndex() != 7 {
-			moveCandidates.addMove(from, to, empty)
+			pseudoLegalMoves.addMove(from, to, empty)
 			return
 		}
 
-		moveCandidates.addMove(from, to, whiteQueen)
-		moveCandidates.addMove(from, to, whiteRook)
-		moveCandidates.addMove(from, to, whiteBishop)
-		moveCandidates.addMove(from, to, whiteKnight)
+		pseudoLegalMoves.addMove(from, to, whiteQueen)
+		pseudoLegalMoves.addMove(from, to, whiteRook)
+		pseudoLegalMoves.addMove(from, to, whiteBishop)
+		pseudoLegalMoves.addMove(from, to, whiteKnight)
 	}
 
 	kingSideCaptures := kingSideControl & capturableSquares
@@ -453,18 +450,18 @@ func (p *Position) surveyPawnControlWhite(getMoveCandidates bool, moveCandidates
 		}
 
 		fromCoord := toCoord - 16
-		moveCandidates.addMove(fromCoord, toCoord, empty)
+		pseudoLegalMoves.addMove(fromCoord, toCoord, empty)
 	}
 }
 
-func (p *Position) surveyPawnControlBlack(getMoveCandidates bool, moveCandidates *moveList) {
+func (p *Position) surveyPawnActivityBlack(getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
 	pawnBitBoard := p.occupationByColour[black] & p.occupationByPieceType[pawn]
 
 	kingSideControl := (pawnBitBoard & ^fileH) >> 7
 	queenSideControl := (pawnBitBoard & ^fileA) >> 9
 	p.controlByColour[black] |= kingSideControl | queenSideControl
 
-	if !getMoveCandidates {
+	if !getPsuedoLegalMoves {
 		return
 	}
 
@@ -476,14 +473,14 @@ func (p *Position) surveyPawnControlBlack(getMoveCandidates bool, moveCandidates
 	occupiedSquares := p.getOccupationBitBoard()
 	addBlackPawnMoves := func(from coordinate, to coordinate) {
 		if to.getRankIndex() != 0 {
-			moveCandidates.addMove(from, to, empty)
+			pseudoLegalMoves.addMove(from, to, empty)
 			return
 		}
 
-		moveCandidates.addMove(from, to, blackQueen)
-		moveCandidates.addMove(from, to, blackRook)
-		moveCandidates.addMove(from, to, blackBishop)
-		moveCandidates.addMove(from, to, blackKnight)
+		pseudoLegalMoves.addMove(from, to, blackQueen)
+		pseudoLegalMoves.addMove(from, to, blackRook)
+		pseudoLegalMoves.addMove(from, to, blackBishop)
+		pseudoLegalMoves.addMove(from, to, blackKnight)
 	}
 
 	kingSideCaptures := kingSideControl & capturableSquares
@@ -528,53 +525,12 @@ func (p *Position) surveyPawnControlBlack(getMoveCandidates bool, moveCandidates
 		}
 
 		fromCoord := toCoord + 16
-		moveCandidates.addMove(fromCoord, toCoord, empty)
+		pseudoLegalMoves.addMove(fromCoord, toCoord, empty)
 	}
 }
 
-func (p Position) inCheck(player colour) bool {
-	return p.isAttackedByEnemy(player, p.kingSquares[player])
-}
-
-func (p Position) isAttackedByEnemy(player colour, theCoord coordinate) bool {
-	return p.controlByColour[player.getOpponent()].get(theCoord)
-}
-
-func (p Position) isOccupiedByFriendly(player colour, theCoord coordinate) bool {
-	return p.occupationByColour[player].get(theCoord)
-}
-
-func (p Position) allowsSafePassage(player colour, theCoord coordinate) bool {
-	return !p.getOccupationBitBoard().get(theCoord) && !p.isAttackedByEnemy(player, theCoord)
-}
-
-func (p Position) getOccupationBitBoard() bitBoard {
-	return p.occupationByColour[white] | p.occupationByColour[black]
-}
-
-func (p *Position) MakeMove(theMove move) error {
-	// check for pseudolegality
-	// TODO make this check robust
-	fromSquareState := p.board[theMove.From]
-	if fromSquareState == empty {
-		return fmt.Errorf("no piece to move: %s", theMove.toString())
-	}
-	if fromSquareState.getColour() != p.activeColour {
-		return fmt.Errorf("attempting to move piece of wrong colour: %s", theMove.toString())
-	}
-
-	toSquareState := p.board[theMove.To]
-	if toSquareState.getColour() == p.activeColour {
-		return fmt.Errorf("cannot move piece to square occupied by friendly piece: %s", theMove.toString())
-	}
-
-	if theMove.Promotion != empty && theMove.Promotion.getColour() != p.activeColour {
-		return fmt.Errorf("cannot promote to enemy piece: %s", theMove.toString())
-	}
-
-	// make pseudomove
-
-	return nil
+func (p *Position) isLegalMove(theMove move) bool {
+	return true
 }
 
 func (p *Position) makePseudoMove(theMove move) (resultsInCheck bool) {
@@ -646,4 +602,49 @@ func (p *Position) makePseudoMove(theMove move) (resultsInCheck bool) {
 	resultsInCheck = false
 
 	return resultsInCheck
+}
+
+func (p Position) inCheck(player colour) bool {
+	return p.isAttackedByEnemy(player, p.kingSquares[player])
+}
+
+func (p Position) isAttackedByEnemy(player colour, theCoord coordinate) bool {
+	return p.controlByColour[player.getOpponent()].get(theCoord)
+}
+
+func (p Position) isOccupiedByFriendly(player colour, theCoord coordinate) bool {
+	return p.occupationByColour[player].get(theCoord)
+}
+
+func (p Position) allowsSafePassage(player colour, theCoord coordinate) bool {
+	return !p.getOccupationBitBoard().get(theCoord) && !p.isAttackedByEnemy(player, theCoord)
+}
+
+func (p Position) getOccupationBitBoard() bitBoard {
+	return p.occupationByColour[white] | p.occupationByColour[black]
+}
+
+func (p *Position) MakeMove(theMove move) error {
+	// check for pseudolegality
+	// TODO make this check robust
+	fromSquareState := p.board[theMove.From]
+	if fromSquareState == empty {
+		return fmt.Errorf("no piece to move: %s", theMove.toString())
+	}
+	if fromSquareState.getColour() != p.activeColour {
+		return fmt.Errorf("attempting to move piece of wrong colour: %s", theMove.toString())
+	}
+
+	toSquareState := p.board[theMove.To]
+	if toSquareState.getColour() == p.activeColour {
+		return fmt.Errorf("cannot move piece to square occupied by friendly piece: %s", theMove.toString())
+	}
+
+	if theMove.Promotion != empty && theMove.Promotion.getColour() != p.activeColour {
+		return fmt.Errorf("cannot promote to enemy piece: %s", theMove.toString())
+	}
+
+	// make pseudomove
+
+	return nil
 }
