@@ -529,11 +529,11 @@ func (p *Position) surveyPawnActivityBlack(getPsuedoLegalMoves bool, pseudoLegal
 	}
 }
 
-func (p *Position) isLegalMove(theMove move) bool {
+func (p *Position) isLegalMove(theMove algebraicMove) bool {
 	return true
 }
 
-func (p *Position) makePseudoMove(theMove move) (resultsInCheck bool) {
+func (p *Position) makePseudoMove(theMove algebraicMove) (resultsInCheck bool) {
 	p.enPassantSquare = nullCoordinate
 
 	fromSquareState := p.board[theMove.From]
@@ -624,7 +624,7 @@ func (p Position) getOccupationBitBoard() bitBoard {
 	return p.occupationByColour[white] | p.occupationByColour[black]
 }
 
-func (p *Position) MakeMove(theMove move) error {
+func (p *Position) MakeMove(theMove algebraicMove) error {
 	// check for pseudolegality
 	// TODO make this check robust
 	fromSquareState := p.board[theMove.From]

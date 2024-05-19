@@ -5,25 +5,25 @@ import (
 	"testing"
 )
 
-func TestMoveFromString(t *testing.T) {
+func TestAlgebraicMoveFromString(t *testing.T) {
 	type testCase struct {
 		moveString string
-		expected   move
+		expected   algebraicMove
 	}
 
 	testCases := []testCase{
 		{
 			"e2e4",
-			move{e2, e4, empty},
+			algebraicMove{e2, e4, empty},
 		},
 		{
 			"f7f8Q",
-			move{f7, f8, whiteQueen},
+			algebraicMove{f7, f8, whiteQueen},
 		},
 	}
 
 	checkCase := func(t *testing.T, c testCase) {
-		result, err := moveFromString(c.moveString)
+		result, err := algebraicMoveFromString(c.moveString)
 		if err != nil {
 			t.Error(err)
 		}
@@ -38,19 +38,19 @@ func TestMoveFromString(t *testing.T) {
 	}
 }
 
-func TestMoveToString(t *testing.T) {
+func TestAlgebraicMoveToString(t *testing.T) {
 	type testCase struct {
-		move     move
+		move     algebraicMove
 		expected string
 	}
 
 	testCases := []testCase{
 		{
-			move{d7, d5, empty},
+			algebraicMove{d7, d5, empty},
 			"d7d5",
 		},
 		{
-			move{h2, h1, blackQueen},
+			algebraicMove{h2, h1, blackQueen},
 			"h2h1q",
 		},
 	}
@@ -67,11 +67,71 @@ func TestMoveToString(t *testing.T) {
 	}
 }
 
+func TestMoveFromParts(t *testing.T) {
+	type testCase struct {
+		name                  string
+		from                  coordinate
+		to                    coordinate
+		capturedPiece         squareState
+		promotionTo           squareState
+		currentCastlingRights castlingRights
+		currentEPSquare       coordinate
+		expectedMove          move
+	}
+
+	testCases := []testCase{
+		{
+			"e2e4",
+			e2, e4, empty, empty, castlingRights(0b1111), nullCoordinate,
+			move(0x40fcc70c),
+		},
+	}
+
+	checkCase := func(t *testing.T, c testCase) {
+		result := moveFromParts(c.from, c.to, c.capturedPiece, c.promotionTo, c.currentCastlingRights, c.currentEPSquare)
+		if result != c.expectedMove {
+			t.Errorf("expected %v, got %v", c.expectedMove, result)
+		}
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) { checkCase(t, c) })
+	}
+}
+
+func TestMoveGetParts(t *testing.T) {
+	theMove := moveFromParts(h7, g8, blackQueen, whiteQueen, blackCastleKingSide|blackCastleQueenSide, nullCoordinate)
+
+	if result := theMove.getFromCoordinate(); result != h7 {
+		t.Errorf("expected h7, got %v", result)
+	}
+
+	if result := theMove.getToCoordinate(); result != g8 {
+		t.Errorf("expected g8, got %v", result)
+	}
+
+	if result := theMove.getCapturedPiece(); result != blackQueen {
+		t.Errorf("expected blackQueen, got %v", result)
+	}
+
+	if result := theMove.getPromotionTo(); result != whiteQueen {
+		t.Errorf("expected whiteQueen, got %v", result)
+	}
+
+	if result := theMove.getCurrentCastlingRights(); result != 0b1100 {
+		t.Errorf("expected castling rights of kq, got %v", result)
+	}
+
+	if result := theMove.getCurrentEPSquare(); result != nullCoordinate {
+		t.Errorf("expected nullCoordinate, got %v", result)
+	}
+}
+
 func TestMoveListFilter(t *testing.T) {
 	type testCase struct {
 		name         string
 		initialList  moveList
-		evaluator    func(move) bool
+		evaluator    func(algebraicMove) bool
 		expectedList moveList
 	}
 
@@ -84,7 +144,7 @@ func TestMoveListFilter(t *testing.T) {
 				{e7, e8, whiteQueen},
 				{d7, d8, whiteQueen},
 			},
-			func(theMove move) bool {
+			func(theMove algebraicMove) bool {
 				return theMove.Promotion == empty
 			},
 			moveList{
@@ -95,12 +155,12 @@ func TestMoveListFilter(t *testing.T) {
 		{
 			"from e2",
 			moveList{
-				{e2, e3, empty},
-				{e2, e4, empty},
 				{d2, d3, empty},
 				{d2, d4, empty},
+				{e2, e3, empty},
+				{e2, e4, empty},
 			},
-			func(theMove move) bool {
+			func(theMove algebraicMove) bool {
 				return theMove.From == e2
 			},
 			moveList{
