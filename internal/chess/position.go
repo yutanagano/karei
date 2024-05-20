@@ -199,7 +199,8 @@ func (p *Position) surveyKingActivity(player colour, getPsuedoLegalMoves bool, p
 		}
 
 		if !p.isAttackedByEnemy(player, toCoord) && !p.isOccupiedByFriendly(player, toCoord) {
-			pseudoLegalMoves.addMove(currentCoord, toCoord, empty)
+			newMove := p.moveFromAlgebraicParts(currentCoord, toCoord, empty)
+			pseudoLegalMoves.add(newMove)
 		}
 	}
 
@@ -210,62 +211,23 @@ func (p *Position) surveyKingActivity(player colour, getPsuedoLegalMoves bool, p
 	switch player {
 	case white:
 		if p.castlingRights.isSet(whiteCastleKingSide) && p.allowsSafePassage(white, f1) && p.allowsSafePassage(white, g1) {
-			pseudoLegalMoves.addMove(e1, g1, empty)
+			whiteKingSideCastle := p.moveFromAlgebraicParts(e1, g1, empty)
+			pseudoLegalMoves.add(whiteKingSideCastle)
 		}
 		if p.castlingRights.isSet(whiteCastleQueenSide) && p.allowsSafePassage(white, d1) && p.allowsSafePassage(white, c1) {
-			pseudoLegalMoves.addMove(e1, c1, empty)
+			whiteQueenSideCastle := p.moveFromAlgebraicParts(e1, g1, empty)
+			pseudoLegalMoves.add(whiteQueenSideCastle)
 		}
 	case black:
 		if p.castlingRights.isSet(blackCastleKingSide) && p.allowsSafePassage(black, f8) && p.allowsSafePassage(black, g8) {
-			pseudoLegalMoves.addMove(e8, g8, empty)
+			blackKingSideCastle := p.moveFromAlgebraicParts(e1, g1, empty)
+			pseudoLegalMoves.add(blackKingSideCastle)
 		}
 		if p.castlingRights.isSet(blackCastleQueenSide) && p.allowsSafePassage(black, d8) && p.allowsSafePassage(black, c8) {
-			pseudoLegalMoves.addMove(e8, c8, empty)
+			blackQueenSideCastle := p.moveFromAlgebraicParts(e1, g1, empty)
+			pseudoLegalMoves.add(blackQueenSideCastle)
 		}
 	}
-}
-
-func (p *Position) currentPlayerCanCastleNow() (canCastleKingSide bool, canCastleQueenSide bool) {
-	if p.inCheck(p.activeColour) {
-		return false, false
-	}
-
-	switch p.activeColour {
-	case white:
-		if !p.castlingRights.isSet(whiteCastleKingSide) {
-			canCastleKingSide = false
-		} else {
-			pathIsClear := !p.isOccupiedByFriendly(white, f1) && !p.isOccupiedByFriendly(white, g1)
-			pathIsSafe := !p.isAttackedByEnemy(white, f1) && !p.isAttackedByEnemy(white, g1)
-			canCastleKingSide = pathIsClear && pathIsSafe
-		}
-
-		if !p.castlingRights.isSet(whiteCastleQueenSide) {
-			canCastleQueenSide = false
-		} else {
-			pathIsClear := !p.isOccupiedByFriendly(white, d1) && !p.isOccupiedByFriendly(white, c1)
-			pathIsSafe := !p.isAttackedByEnemy(white, d1) && !p.isAttackedByEnemy(white, c1)
-			canCastleQueenSide = pathIsClear && pathIsSafe
-		}
-	case black:
-		if !p.castlingRights.isSet(blackCastleKingSide) {
-			canCastleKingSide = false
-		} else {
-			pathIsClear := !p.isOccupiedByFriendly(black, f8) && !p.isOccupiedByFriendly(black, g8)
-			pathIsSafe := !p.isAttackedByEnemy(black, f8) && !p.isAttackedByEnemy(black, g8)
-			canCastleKingSide = pathIsClear && pathIsSafe
-		}
-
-		if !p.castlingRights.isSet(blackCastleQueenSide) {
-			canCastleQueenSide = false
-		} else {
-			pathIsClear := !p.isOccupiedByFriendly(black, d8) && !p.isOccupiedByFriendly(black, c8)
-			pathIsSafe := !p.isAttackedByEnemy(black, d8) && !p.isAttackedByEnemy(black, c8)
-			canCastleQueenSide = pathIsClear && pathIsSafe
-		}
-	}
-
-	return canCastleKingSide, canCastleQueenSide
 }
 
 func (p *Position) surveyQueenActivity(player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
@@ -333,7 +295,8 @@ func (p *Position) surveySlidingControlFromCoordinate(originalCoord coordinate, 
 	for toCoord, err := originalCoord.move(unitDelta); err == nil; toCoord, err = toCoord.move(unitDelta) {
 		p.controlByColour[player].turnOn(toCoord)
 		if getPsuedoLegalMoves && !p.isOccupiedByFriendly(player, toCoord) {
-			pseudoLegalMoves.addMove(originalCoord, toCoord, empty)
+			newMove := p.moveFromAlgebraicParts(originalCoord, toCoord, empty)
+			pseudoLegalMoves.add(newMove)
 		}
 		if p.board[toCoord] != empty {
 			break
@@ -364,7 +327,8 @@ func (p *Position) surveyKnightActivity(player colour, getPsuedoLegalMoves bool,
 			}
 
 			if !p.isOccupiedByFriendly(player, toCoord) {
-				pseudoLegalMoves.addMove(currentCoord, toCoord, empty)
+				newMove := p.moveFromAlgebraicParts(currentCoord, toCoord, empty)
+				pseudoLegalMoves.add(newMove)
 			}
 		}
 	}
@@ -398,14 +362,14 @@ func (p *Position) surveyPawnActivityWhite(getPsuedoLegalMoves bool, pseudoLegal
 	occupiedSquares := p.getOccupationBitBoard()
 	addWhitePawnMoves := func(from coordinate, to coordinate) {
 		if to.getRankIndex() != 7 {
-			pseudoLegalMoves.addMove(from, to, empty)
+			pseudoLegalMoves.add(p.moveFromAlgebraicParts(from, to, empty))
 			return
 		}
 
-		pseudoLegalMoves.addMove(from, to, whiteQueen)
-		pseudoLegalMoves.addMove(from, to, whiteRook)
-		pseudoLegalMoves.addMove(from, to, whiteBishop)
-		pseudoLegalMoves.addMove(from, to, whiteKnight)
+		for _, promotionPiece := range []squareState{whiteQueen, whiteRook, whiteBishop, whiteKnight} {
+			promotion := p.moveFromAlgebraicParts(from, to, promotionPiece)
+			pseudoLegalMoves.add(promotion)
+		}
 	}
 
 	kingSideCaptures := kingSideControl & capturableSquares
@@ -450,7 +414,8 @@ func (p *Position) surveyPawnActivityWhite(getPsuedoLegalMoves bool, pseudoLegal
 		}
 
 		fromCoord := toCoord - 16
-		pseudoLegalMoves.addMove(fromCoord, toCoord, empty)
+		newMove := p.moveFromAlgebraicParts(fromCoord, toCoord, empty)
+		pseudoLegalMoves.add(newMove)
 	}
 }
 
@@ -473,14 +438,15 @@ func (p *Position) surveyPawnActivityBlack(getPsuedoLegalMoves bool, pseudoLegal
 	occupiedSquares := p.getOccupationBitBoard()
 	addBlackPawnMoves := func(from coordinate, to coordinate) {
 		if to.getRankIndex() != 0 {
-			pseudoLegalMoves.addMove(from, to, empty)
+			newMove := p.moveFromAlgebraicParts(from, to, empty)
+			pseudoLegalMoves.add(newMove)
 			return
 		}
 
-		pseudoLegalMoves.addMove(from, to, blackQueen)
-		pseudoLegalMoves.addMove(from, to, blackRook)
-		pseudoLegalMoves.addMove(from, to, blackBishop)
-		pseudoLegalMoves.addMove(from, to, blackKnight)
+		for _, promotionPiece := range []squareState{blackQueen, blackRook, blackBishop, blackKnight} {
+			promotion := p.moveFromAlgebraicParts(from, to, promotionPiece)
+			pseudoLegalMoves.add(promotion)
+		}
 	}
 
 	kingSideCaptures := kingSideControl & capturableSquares
@@ -525,11 +491,16 @@ func (p *Position) surveyPawnActivityBlack(getPsuedoLegalMoves bool, pseudoLegal
 		}
 
 		fromCoord := toCoord + 16
-		pseudoLegalMoves.addMove(fromCoord, toCoord, empty)
+		newMove := p.moveFromAlgebraicParts(fromCoord, toCoord, empty)
+		pseudoLegalMoves.add(newMove)
 	}
 }
 
-func (p *Position) isLegalMove(theMove algebraicMove) bool {
+func (p Position) moveFromAlgebraicParts(from, to coordinate, promotionTo squareState) move {
+	return moveFromParts(from, to, p.board[to], promotionTo, p.castlingRights, p.enPassantSquare)
+}
+
+func (p *Position) isLegalMove(theMove move) bool {
 	return true
 }
 

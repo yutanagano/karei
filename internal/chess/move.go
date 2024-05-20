@@ -2,7 +2,6 @@ package chess
 
 import (
 	"fmt"
-	"reflect"
 )
 
 type algebraicMove struct {
@@ -116,13 +115,13 @@ func (m move) getCurrentEPSquare() coordinate {
 	return coordinate((m & moveMaskEPSquare) >> moveOffsetEPSquare)
 }
 
-type moveList []algebraicMove
+type moveList []move
 
-func (l *moveList) addMove(from coordinate, to coordinate, promotion squareState) {
-	*l = append(*l, algebraicMove{from, to, promotion})
+func (l *moveList) add(theMove move) {
+	*l = append(*l, theMove)
 }
 
-func (l *moveList) filter(evaluator func(algebraicMove) bool) {
+func (l *moveList) filter(evaluator func(move) bool) {
 	writeIndex := 0
 
 	for _, theMove := range *l {
@@ -135,9 +134,9 @@ func (l *moveList) filter(evaluator func(algebraicMove) bool) {
 	(*l) = (*l)[:writeIndex]
 }
 
-func (l moveList) contains(query algebraicMove) bool {
+func (l moveList) contains(query move) bool {
 	for _, element := range l {
-		if reflect.DeepEqual(query, element) {
+		if query == element {
 			return true
 		}
 	}

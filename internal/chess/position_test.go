@@ -98,17 +98,17 @@ func TestGetPseudoLegalMoves(t *testing.T) {
 
 	expectedNumMoves := 51
 	expected := moveList{
-		{d1, d6, empty},
-		{d1, f1, empty},
-		{h1, g1, empty},
-		{b5, d7, empty},
-		{g5, h4, empty},
-		{b3, h3, empty},
-		{b3, f7, empty},
-		{c1, d2, empty},
-		{c2, c3, empty},
-		{c2, c4, empty},
-		{h2, h3, empty},
+		moveFromParts(d1, d6, empty, empty, blackCastleKingSide, nullCoordinate),
+		moveFromParts(d1, f1, empty, empty, blackCastleKingSide, nullCoordinate),
+		moveFromParts(h1, g1, empty, empty, blackCastleKingSide, nullCoordinate),
+		moveFromParts(b5, d7, blackKnight, empty, blackCastleKingSide, nullCoordinate),
+		moveFromParts(g5, h4, empty, empty, blackCastleKingSide, nullCoordinate),
+		moveFromParts(b3, h3, empty, empty, blackCastleKingSide, nullCoordinate),
+		moveFromParts(b3, f7, blackPawn, empty, blackCastleKingSide, nullCoordinate),
+		moveFromParts(c1, d2, empty, empty, blackCastleKingSide, nullCoordinate),
+		moveFromParts(c2, c3, empty, empty, blackCastleKingSide, nullCoordinate),
+		moveFromParts(c2, c4, empty, empty, blackCastleKingSide, nullCoordinate),
+		moveFromParts(h2, h3, empty, empty, blackCastleKingSide, nullCoordinate),
 	}
 
 	if numMoves := len(thePosition.legalMoves); numMoves != expectedNumMoves {
@@ -117,7 +117,7 @@ func TestGetPseudoLegalMoves(t *testing.T) {
 
 	for _, m := range expected {
 		if !thePosition.legalMoves.contains(m) {
-			t.Errorf("expected move %v that was not generated", m)
+			t.Errorf("expected move %b that was not generated", m)
 		}
 	}
 }

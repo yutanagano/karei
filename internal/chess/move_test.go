@@ -131,42 +131,18 @@ func TestMoveListFilter(t *testing.T) {
 	type testCase struct {
 		name         string
 		initialList  moveList
-		evaluator    func(algebraicMove) bool
+		evaluator    func(move) bool
 		expectedList moveList
 	}
 
 	testCases := []testCase{
 		{
 			"non-promotions",
-			moveList{
-				{e2, e4, empty},
-				{d2, d4, empty},
-				{e7, e8, whiteQueen},
-				{d7, d8, whiteQueen},
+			moveList{0, 1, 2, 3, 4, 5},
+			func(theMove move) bool {
+				return theMove%2 == 0
 			},
-			func(theMove algebraicMove) bool {
-				return theMove.Promotion == empty
-			},
-			moveList{
-				{e2, e4, empty},
-				{d2, d4, empty},
-			},
-		},
-		{
-			"from e2",
-			moveList{
-				{d2, d3, empty},
-				{d2, d4, empty},
-				{e2, e3, empty},
-				{e2, e4, empty},
-			},
-			func(theMove algebraicMove) bool {
-				return theMove.From == e2
-			},
-			moveList{
-				{e2, e3, empty},
-				{e2, e4, empty},
-			},
+			moveList{0, 2, 4},
 		},
 	}
 
