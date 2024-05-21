@@ -164,7 +164,14 @@ func (p *Position) setSquare(theCoord coordinate, theState squareState) {
 	p.occupationByPieceType[thePieceType].turnOn(theCoord)
 }
 
+func (p Position) getSquare(theCoord coordinate) squareState {
+	return p.board[theCoord]
+}
+
 func (p *Position) doStaticAnalysis() {
+	p.controlByColour[white] = 0
+	p.controlByColour[black] = 0
+
 	p.surveyPieceActivity(p.activeColour.getOpponent(), false)
 	p.legalMoves = p.surveyPieceActivity(p.activeColour, true)
 	p.legalMoves.filter(p.isLegalMove)
@@ -298,7 +305,7 @@ func (p *Position) surveySlidingControlFromCoordinate(originalCoord coordinate, 
 			newMove := p.moveFromAlgebraicParts(originalCoord, toCoord, empty)
 			pseudoLegalMoves.add(newMove)
 		}
-		if p.board[toCoord] != empty {
+		if p.getSquare(toCoord) != empty {
 			break
 		}
 	}
@@ -497,82 +504,106 @@ func (p *Position) surveyPawnActivityBlack(getPsuedoLegalMoves bool, pseudoLegal
 }
 
 func (p Position) moveFromAlgebraicParts(from, to coordinate, promotionTo squareState) move {
-	return moveFromParts(from, to, p.board[to], promotionTo, p.castlingRights, p.enPassantSquare)
+	return moveFromParts(from, to, p.getSquare(to), promotionTo, p.castlingRights, p.enPassantSquare)
 }
 
 func (p *Position) isLegalMove(theMove move) bool {
 	return true
 }
 
-func (p *Position) makePseudoMove(theMove algebraicMove) (resultsInCheck bool) {
+func (p *Position) makePseudoLegalMove(theMove move) {
 	p.enPassantSquare = nullCoordinate
 
-	fromSquareState := p.board[theMove.From]
+	fromCoord := theMove.getFromCoordinate()
+	toCoord := theMove.getToCoordinate()
+	EPSquare := theMove.getCurrentEPSquare()
+	pieceBeingMoved := p.getSquare(fromCoord)
 
-	switch fromSquareState {
+	switch pieceBeingMoved {
 	case whiteKing:
 		p.castlingRights.turnOff(whiteCastleKingSide | whiteCastleQueenSide)
-		if theMove.From == e1 && theMove.To == c1 {
+		if fromCoord == e1 && toCoord == c1 {
 			p.setSquare(a1, empty)
 			p.setSquare(d1, whiteRook)
-		} else if theMove.From == e1 && theMove.To == g1 {
+		} else if fromCoord == e1 && toCoord == g1 {
 			p.setSquare(h1, empty)
 			p.setSquare(f1, whiteRook)
 		}
 	case blackKing:
 		p.castlingRights.turnOff(blackCastleKingSide | blackCastleQueenSide)
-		if theMove.From == e8 && theMove.To == c8 {
+		if fromCoord == e8 && toCoord == c8 {
 			p.setSquare(a8, empty)
-			p.setSquare(d8, whiteRook)
-		} else if theMove.From == e8 && theMove.To == g8 {
+			p.setSquare(d8, blackRook)
+		} else if fromCoord == e8 && toCoord == g8 {
 			p.setSquare(h8, empty)
-			p.setSquare(f8, whiteRook)
+			p.setSquare(f8, blackRook)
 		}
 	case whiteRook:
-		if p.castlingRights.isSet(whiteCastleKingSide) && theMove.From == h1 {
+		if p.castlingRights.isSet(whiteCastleKingSide) && fromCoord == h1 {
 			p.castlingRights.turnOff(whiteCastleKingSide)
-		} else if p.castlingRights.isSet(whiteCastleQueenSide) && theMove.From == a1 {
+		} else if p.castlingRights.isSet(whiteCastleQueenSide) && fromCoord == a1 {
 			p.castlingRights.turnOff(whiteCastleQueenSide)
 		}
 	case blackRook:
-		if p.castlingRights.isSet(blackCastleKingSide) && theMove.From == h8 {
+		if p.castlingRights.isSet(blackCastleKingSide) && fromCoord == h8 {
 			p.castlingRights.turnOff(blackCastleKingSide)
-		} else if p.castlingRights.isSet(blackCastleQueenSide) && theMove.From == a8 {
+		} else if p.castlingRights.isSet(blackCastleQueenSide) && fromCoord == a8 {
 			p.castlingRights.turnOff(blackCastleQueenSide)
 		}
 	case whitePawn:
-		switch theMove.getOffset() {
-		case 16:
-			p.enPassantSquare = theMove.From + 8
-		case 7:
-			p.setSquare(theMove.From-1, empty)
-		case 9:
-			p.setSquare(theMove.From+1, empty)
+		if toCoord-fromCoord == 16 {
+			p.enPassantSquare = fromCoord + 8
+		}
+		if toCoord == EPSquare {
+			p.setSquare(toCoord-8, empty)
 		}
 	case blackPawn:
-		switch theMove.getOffset() {
-		case -16:
-			p.enPassantSquare = theMove.From - 8
-		case -7:
-			p.setSquare(theMove.From+1, empty)
-		case -9:
-			p.setSquare(theMove.From-1, empty)
+		if fromCoord-toCoord == 16 {
+			p.enPassantSquare = fromCoord - 8
+		}
+		if toCoord == EPSquare {
+			p.setSquare(toCoord+8, empty)
 		}
 	}
 
-	p.setSquare(theMove.From, empty)
-	if theMove.Promotion != empty {
-		p.setSquare(theMove.To, theMove.Promotion)
+	p.setSquare(fromCoord, empty)
+	if promotionTo := theMove.getPromotionTo(); promotionTo != empty {
+		p.setSquare(toCoord, promotionTo)
 	} else {
-		p.setSquare(theMove.To, fromSquareState)
+		p.setSquare(toCoord, pieceBeingMoved)
 	}
 
 	p.activeColour = p.activeColour.getOpponent()
 
-	// TODO check if the player who moved is now in check
-	resultsInCheck = false
+	p.doStaticAnalysis()
+}
 
-	return resultsInCheck
+func (p *Position) unmakeMove(theMove move) {
+	p.enPassantSquare = theMove.getCurrentEPSquare()
+	p.castlingRights = theMove.getCurrentCastlingRights()
+
+	fromCoord := theMove.getFromCoordinate()
+	toCoord := theMove.getToCoordinate()
+	pieceBeingMoved := p.getSquare(toCoord)
+
+	switch pieceBeingMoved {
+	case whiteKing:
+		if fromCoord == e1 && toCoord == c1 {
+			p.setSquare(a1, whiteRook)
+			p.setSquare(d1, empty)
+		} else if fromCoord == e1 && toCoord == g1 {
+			p.setSquare(h1, whiteRook)
+			p.setSquare(f1, empty)
+		}
+	case blackKing:
+		if fromCoord == e8 && toCoord == c8 {
+			p.setSquare(a8, blackRook)
+			p.setSquare(d8, empty)
+		} else if fromCoord == e8 && toCoord == g8 {
+			p.setSquare(h8, blackRook)
+			p.setSquare(f8, empty)
+		}
+	}
 }
 
 func (p Position) inCheck(player colour) bool {
