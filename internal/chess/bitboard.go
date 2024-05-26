@@ -7,38 +7,34 @@ import (
 type bitBoard uint64
 
 const (
-	fileA bitBoard = 0x0101010101010101
-	fileH bitBoard = 0x8080808080808080
-	rank4 bitBoard = 0x00000000FF000000
-	rank5 bitBoard = 0x000000FF00000000
+	bitBoardFileAMask bitBoard = 0x0101010101010101
+	bitBoardFileHMask bitBoard = 0x8080808080808080
+	bitBoardRank4Mask bitBoard = 0x00000000FF000000
+	bitBoardRank5Mask bitBoard = 0x000000FF00000000
 )
 
 func (b bitBoard) count() int {
 	return bits.OnesCount64(uint64(b))
 }
 
-func (b bitBoard) get(coord coordinate) bool {
-	return b&(1<<coord) != 0
+func (b bitBoard) get(c coordinate) bool {
+	return b&(1<<c) != 0
 }
 
-func (b *bitBoard) turnOn(coord coordinate) {
-	*b |= 1 << coord
+func (b *bitBoard) turnOn(c coordinate) {
+	*b |= 1 << c
 }
 
-func (b *bitBoard) turnOff(coord coordinate) {
-	*b &= bitBoard(^uint64(1) << coord)
+func (b *bitBoard) turnOff(c coordinate) {
+	*b &= ^(1 << c)
 }
 
-func (b *bitBoard) pop() (place coordinate, ok bool) {
+func (b *bitBoard) pop() (c coordinate, ok bool) {
 	if *b == 0 {
-		place = 0
-		ok = false
-		return place, ok
+		return coordinate(0), false
 	}
 
-	place = coordinate(bits.TrailingZeros64(uint64(*b)))
-	ok = true
-	*b &= ^(1 << place)
-
-	return place, ok
+	c = coordinate(bits.TrailingZeros64(uint64(*b)))
+	*b &= ^(1 << c)
+	return c, true
 }

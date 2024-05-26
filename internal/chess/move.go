@@ -117,6 +117,19 @@ func (m move) getCurrentEPSquare() coordinate {
 
 type moveList []move
 
+func (l moveList) contains(query move) bool {
+	for _, element := range l {
+		if query == element {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *moveList) clear() {
+	(*l) = (*l)[:0]
+}
+
 func (l *moveList) add(theMove move) {
 	*l = append(*l, theMove)
 }
@@ -132,13 +145,4 @@ func (l *moveList) filter(evaluator func(move) bool) {
 	}
 
 	(*l) = (*l)[:writeIndex]
-}
-
-func (l moveList) contains(query move) bool {
-	for _, element := range l {
-		if query == element {
-			return true
-		}
-	}
-	return false
 }

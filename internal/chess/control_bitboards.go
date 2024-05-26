@@ -4,10 +4,10 @@ var kingControlFrom [64]bitBoard
 var knightControlFrom [64]bitBoard
 
 func initKingControlBitBoards() {
-	for currentSquare := a1; currentSquare <= h8; currentSquare++ {
+	for currentSquare := coordinate(0); currentSquare < 64; currentSquare++ {
 		controlBitBoard := bitBoard(0)
 
-		for _, d := range []gridDelta{
+		for _, d := range []gridOffset{
 			{1, 0},
 			{1, 1},
 			{0, 1},
@@ -27,10 +27,10 @@ func initKingControlBitBoards() {
 }
 
 func initKnightControlBitBoards() {
-	for currentSquare := a1; currentSquare <= h8; currentSquare++ {
+	for currentSquare := coordinate(0); currentSquare < 64; currentSquare++ {
 		controlBitBoard := bitBoard(0)
 
-		for _, d := range []gridDelta{
+		for _, d := range []gridOffset{
 			{2, -1},
 			{2, 1},
 			{1, 2},

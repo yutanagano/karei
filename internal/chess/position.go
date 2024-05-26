@@ -6,51 +6,47 @@ import (
 )
 
 type Position struct {
-	board                  [64]squareState
-	occupationByColour     [2]bitBoard
-	occupationByPieceType  [6]bitBoard
-	controlByColour        [2]bitBoard
-	kingSquares            [2]coordinate
-	enPassantSquare        coordinate
-	castlingRights         castlingRights
-	activeColour           colour
-	pieceColourTypeCounter [12]int
-	halfMoveClock          uint8
-	legalMoves             moveList
+	board                [64]option[piece]
+	bitBoardsByColour    [2]bitBoard
+	bitBoardsByPieceType [6]bitBoard
+	enPassantSquare      option[coordinate]
+	castlingRights       castlingRights
+	activeColour         colour
+	halfMoveClock        uint8
 }
 
-func (p *Position) LoadFEN(f FEN) error {
-	p.clear()
-	var currentFileIndex, currentRankIndex int8 = 0, 7
+func PositionFromFEN(f FEN) (Position, error) {
+	p := Position{}
+
+	currentFile := fileA
+	currentRank := rank8
 	for _, currentRune := range f.BoardState {
-		if currentFileIndex > 8 {
-			return fmt.Errorf("bad FEN: overfilled row during board specification, row %v col %v", currentRankIndex, currentFileIndex)
+		if currentFile > fileH {
+			return p, fmt.Errorf("bad FEN: overfilled row during board specification, row %v col %v", currentRank, currentFile)
 		}
 
 		if currentRune == '/' {
-			if currentFileIndex != 8 {
-				return fmt.Errorf("bad FEN: underfilled row during board specification, row %v col %v", currentRankIndex, currentFileIndex)
+			if currentFile != fileH+1 {
+				return p, fmt.Errorf("bad FEN: underfilled row during board specification, row %v col %v", currentRank, currentFile)
 			}
 
-			currentRankIndex--
-			currentFileIndex = 0
+			currentRank--
+			currentFile = fileA
 			continue
 		}
 
 		if numEmptySquares, err := strconv.Atoi(string(currentRune)); err == nil {
-			currentFileIndex += int8(numEmptySquares)
+			currentFile += uint8(numEmptySquares)
 			continue
 		}
 
-		currentCoordinate, _ := coordinateFromRankFileIndices(currentFileIndex, currentRankIndex)
-		currentSquareState, err := squareStateFromRune(currentRune)
-
+		thePiece, err := pieceFromRune(currentRune)
 		if err != nil {
-			return fmt.Errorf("bad FEN: %s", err.Error())
+			return p, fmt.Errorf("bad FEN: %s", err.Error())
 		}
 
-		p.setSquare(currentCoordinate, currentSquareState)
-		currentFileIndex++
+		p.setSquare(coordinateFromParts(currentFile, currentRank), thePiece)
+		currentFile++
 	}
 
 	switch f.ActiveColour {
@@ -59,14 +55,10 @@ func (p *Position) LoadFEN(f FEN) error {
 	case "b":
 		p.activeColour = black
 	default:
-		return fmt.Errorf("bad FEN: unrecognised colour %s", f.ActiveColour)
+		return p, fmt.Errorf("bad FEN: unrecognised colour %s", f.ActiveColour)
 	}
 
-	p.castlingRights = 0
-	switch f.CastlingRights {
-	case "-":
-		break
-	default:
+	if f.CastlingRights != "-" {
 		for _, theRune := range f.CastlingRights {
 			if theRune == 'K' {
 				p.castlingRights.turnOn(whiteCastleKingSide)
@@ -85,117 +77,59 @@ func (p *Position) LoadFEN(f FEN) error {
 				continue
 			}
 
-			return fmt.Errorf("bad FEN: unrecognised character in castling rights specification: %c", theRune)
+			return p, fmt.Errorf("bad FEN: unrecognised character in castling rights specification: %c", theRune)
 		}
 	}
 
-	switch f.EnPassantSquare {
-	case "-":
-		p.enPassantSquare = nullCoordinate
-	default:
+	if f.EnPassantSquare != "-" {
 		eps, err := coordinateFromString(f.EnPassantSquare)
 		if err != nil {
-			return fmt.Errorf("bad FEN: %s", err.Error())
+			return p, fmt.Errorf("bad FEN: %s", err.Error())
 		}
-		p.enPassantSquare = eps
+		p.enPassantSquare.setValue(eps)
 	}
 
 	hmcInt, err := strconv.Atoi(f.HalfMoveClock)
 	if err != nil {
-		return fmt.Errorf("bad FEN: %s", err.Error())
+		return p, fmt.Errorf("bad FEN: %s", err.Error())
 	}
 	if hmcInt < 0 {
-		return fmt.Errorf("bad FEN: half move clock is negative")
+		return p, fmt.Errorf("bad FEN: half move clock is negative")
 	}
 	p.halfMoveClock = uint8(hmcInt)
 
-	p.doStaticAnalysis()
-
-	return nil
+	return p, nil
 }
 
-func (p *Position) clear() {
-	for idx := range p.board {
-		p.board[idx] = empty
-	}
-	for idx := range p.occupationByColour {
-		p.occupationByColour[idx] = 0
-	}
-	for idx := range p.occupationByPieceType {
-		p.occupationByPieceType[idx] = 0
-	}
-	for idx := range p.controlByColour {
-		p.controlByColour[idx] = 0
-	}
-	for idx := range p.kingSquares {
-		p.kingSquares[idx] = nullCoordinate
-	}
-	p.enPassantSquare = nullCoordinate
-	p.castlingRights = 0
-	p.activeColour = white
-	for idx := range p.pieceColourTypeCounter {
-		p.pieceColourTypeCounter[idx] = 0
-	}
-	p.halfMoveClock = 0
-	p.legalMoves = moveList{}
+func (p *Position) getLegalMoves() moveList {
+	moves := moveList{}
+	enemyAttackBoard := bitBoard(0)
+
+	p.surveyActivity(p.activeColour.getOpponent(), &moves, &enemyAttackBoard)
+	p.surveyActivity(p.activeColour, &moves, &enemyAttackBoard)
+
+	moves.filter(p.isLegalMove)
+
+	return moves
 }
 
-func (p *Position) setSquare(theCoord coordinate, theState squareState) {
-	p.board[theCoord] = theState
-
-	if theState == empty {
-		p.occupationByColour[white].turnOff(theCoord)
-		p.occupationByColour[black].turnOff(theCoord)
-
-		for thePieceType := king; thePieceType <= pawn; thePieceType++ {
-			p.occupationByPieceType[thePieceType].turnOff(theCoord)
-		}
-		return
-	}
-
-	thePieceType := theState.getPieceType()
-	theColour := theState.getColour()
-
-	if thePieceType == king {
-		p.kingSquares[theColour] = theCoord
-	}
-
-	p.occupationByColour[theColour].turnOn(theCoord)
-	p.occupationByPieceType[thePieceType].turnOn(theCoord)
+func (p Position) surveyActivity(c colour, moveCandidates *moveList, enemyAttackBoard *bitBoard) {
+	p.surveyKingActivity(c, moveCandidates, enemyAttackBoard)
+	p.surveyQueenActivity(c, moveCandidates, enemyAttackBoard)
+	p.surveyRookActivity(c, moveCandidates, enemyAttackBoard)
+	p.surveyBishopActivity(c, moveCandidates, enemyAttackBoard)
+	p.surveyKnightActivity(c, moveCandidates, enemyAttackBoard)
+	p.surveyPawnActivity(c, moveCandidates, enemyAttackBoard)
 }
 
-func (p Position) getSquare(theCoord coordinate) squareState {
-	return p.board[theCoord]
-}
-
-func (p *Position) doStaticAnalysis() {
-	p.controlByColour[white] = 0
-	p.controlByColour[black] = 0
-
-	p.surveyPieceActivity(p.activeColour.getOpponent(), false)
-	p.legalMoves = p.surveyPieceActivity(p.activeColour, true)
-	p.legalMoves.filter(p.isLegalMove)
-}
-
-func (p *Position) surveyPieceActivity(player colour, getPsuedoLegalMoves bool) moveList {
-	pseudoLegalMoves := moveList{}
-
-	p.surveyKingActivity(player, getPsuedoLegalMoves, &pseudoLegalMoves)
-	p.surveyQueenActivity(player, getPsuedoLegalMoves, &pseudoLegalMoves)
-	p.surveyRookActivity(player, getPsuedoLegalMoves, &pseudoLegalMoves)
-	p.surveyBishopActivity(player, getPsuedoLegalMoves, &pseudoLegalMoves)
-	p.surveyKnightActivity(player, getPsuedoLegalMoves, &pseudoLegalMoves)
-	p.surveyPawnActivity(player, getPsuedoLegalMoves, &pseudoLegalMoves)
-
-	return pseudoLegalMoves
-}
-
-func (p *Position) surveyKingActivity(player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
-	currentCoord := p.kingSquares[player]
+func (p Position) surveyKingActivity(c colour, moveCandidates *moveList, enemyAttackBoard *bitBoard) {
+	isForEnemy := c != p.activeColour
+	kingBitBoard := p.bitBoardsByColour[c] ^ p.bitBoardsByPieceType[king]
+	currentCoord, _ := kingBitBoard.pop()
 	controlledSquares := kingControlFrom[currentCoord]
-	p.controlByColour[player] |= controlledSquares
 
-	if !getPsuedoLegalMoves {
+	if isForEnemy {
+		*enemyAttackBoard |= controlledSquares
 		return
 	}
 
@@ -205,47 +139,51 @@ func (p *Position) surveyKingActivity(player colour, getPsuedoLegalMoves bool, p
 			break
 		}
 
-		if !p.isAttackedByEnemy(player, toCoord) && !p.isOccupiedByFriendly(player, toCoord) {
+		if !enemyAttackBoard.get(toCoord) && !p.isOccupiedByFriendly(toCoord) {
 			newMove := p.moveFromAlgebraicParts(currentCoord, toCoord, empty)
-			pseudoLegalMoves.add(newMove)
+			moveCandidates.add(newMove)
 		}
 	}
 
-	if p.inCheck(player) {
+	if enemyAttackBoard.get(currentCoord) {
 		return
 	}
 
-	switch player {
+	clearForCastling := func(c coordinate) bool {
+		return !(p.getOccupationBitBoard() | *enemyAttackBoard).get(c)
+	}
+
+	switch c {
 	case white:
-		if p.castlingRights.isSet(whiteCastleKingSide) && p.allowsSafePassage(white, f1) && p.allowsSafePassage(white, g1) {
+		if p.castlingRights.isSet(whiteCastleKingSide) && clearForCastling(f1) && clearForCastling(g1) {
 			whiteKingSideCastle := p.moveFromAlgebraicParts(e1, g1, empty)
-			pseudoLegalMoves.add(whiteKingSideCastle)
+			moveCandidates.add(whiteKingSideCastle)
 		}
-		if p.castlingRights.isSet(whiteCastleQueenSide) && p.allowsSafePassage(white, d1) && p.allowsSafePassage(white, c1) {
+		if p.castlingRights.isSet(whiteCastleQueenSide) && clearForCastling(d1) && clearForCastling(c1) {
 			whiteQueenSideCastle := p.moveFromAlgebraicParts(e1, g1, empty)
-			pseudoLegalMoves.add(whiteQueenSideCastle)
+			moveCandidates.add(whiteQueenSideCastle)
 		}
 	case black:
-		if p.castlingRights.isSet(blackCastleKingSide) && p.allowsSafePassage(black, f8) && p.allowsSafePassage(black, g8) {
+		if p.castlingRights.isSet(blackCastleKingSide) && clearForCastling(f8) && clearForCastling(g8) {
 			blackKingSideCastle := p.moveFromAlgebraicParts(e1, g1, empty)
-			pseudoLegalMoves.add(blackKingSideCastle)
+			moveCandidates.add(blackKingSideCastle)
 		}
-		if p.castlingRights.isSet(blackCastleQueenSide) && p.allowsSafePassage(black, d8) && p.allowsSafePassage(black, c8) {
+		if p.castlingRights.isSet(blackCastleQueenSide) && clearForCastling(d8) && clearForCastling(c8) {
 			blackQueenSideCastle := p.moveFromAlgebraicParts(e1, g1, empty)
-			pseudoLegalMoves.add(blackQueenSideCastle)
+			moveCandidates.add(blackQueenSideCastle)
 		}
 	}
 }
 
-func (p *Position) surveyQueenActivity(player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
-	queensBitBoard := p.occupationByColour[player] & p.occupationByPieceType[queen]
+func (p *Position) surveyQueenActivity(c colour, moveCandidates *moveList, enemyAttackBoard *bitBoard) {
+	queensBitBoard := p.bitBoardsByColour[c] & p.bitBoardsByPieceType[queen]
 	for {
 		currentCoord, ok := queensBitBoard.pop()
 		if !ok {
 			break
 		}
 
-		for _, delta := range []gridDelta{
+		for _, o := range []gridOffset{
 			{1, 0},
 			{1, 1},
 			{0, 1},
@@ -255,64 +193,71 @@ func (p *Position) surveyQueenActivity(player colour, getPsuedoLegalMoves bool, 
 			{0, -1},
 			{1, -1},
 		} {
-			p.surveySlidingControlFromCoordinate(currentCoord, delta, player, getPsuedoLegalMoves, pseudoLegalMoves)
+			p.surveySlidingControlFromCoordinate(currentCoord, o, c, moveCandidates, enemyAttackBoard)
 		}
 	}
 }
 
-func (p *Position) surveyRookActivity(player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
-	rooksBitBoard := p.occupationByColour[player] & p.occupationByPieceType[rook]
+func (p *Position) surveyRookActivity(c colour, moveCandiddates *moveList, enemyAttackBoard *bitBoard) {
+	rooksBitBoard := p.bitBoardsByColour[c] & p.bitBoardsByPieceType[rook]
 	for {
 		currentCoord, ok := rooksBitBoard.pop()
 		if !ok {
 			break
 		}
 
-		for _, theOffset := range []gridDelta{
+		for _, o := range []gridOffset{
 			{1, 0},
 			{0, 1},
 			{-1, 0},
 			{0, -1},
 		} {
-			p.surveySlidingControlFromCoordinate(currentCoord, theOffset, player, getPsuedoLegalMoves, pseudoLegalMoves)
+			p.surveySlidingControlFromCoordinate(currentCoord, o, c, moveCandiddates, enemyAttackBoard)
 		}
 	}
 }
 
-func (p *Position) surveyBishopActivity(player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
-	bishopsBitBoard := p.occupationByColour[player] & p.occupationByPieceType[bishop]
+func (p *Position) surveyBishopActivity(c colour, moveCandidates *moveList, enemyAttackBoard *bitBoard) {
+	bishopsBitBoard := p.bitBoardsByColour[c] & p.bitBoardsByPieceType[bishop]
 	for {
 		currentCoord, ok := bishopsBitBoard.pop()
 		if !ok {
 			break
 		}
 
-		for _, theOffset := range []gridDelta{
+		for _, o := range []gridOffset{
 			{1, 1},
 			{-1, 1},
 			{-1, -1},
 			{1, -1},
 		} {
-			p.surveySlidingControlFromCoordinate(currentCoord, theOffset, player, getPsuedoLegalMoves, pseudoLegalMoves)
+			p.surveySlidingControlFromCoordinate(currentCoord, o, c, moveCandidates, enemyAttackBoard)
 		}
 	}
 }
 
-func (p *Position) surveySlidingControlFromCoordinate(originalCoord coordinate, unitDelta gridDelta, player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
+func (p *Position) surveySlidingControlFromCoordinate(originalCoord coordinate, unitDelta gridOffset, c colour, moveCandidates *moveList, enemyAttackBoard *bitBoard) {
+	isForEnemy := c != p.activeColour
+
 	for toCoord, err := originalCoord.move(unitDelta); err == nil; toCoord, err = toCoord.move(unitDelta) {
-		p.controlByColour[player].turnOn(toCoord)
-		if getPsuedoLegalMoves && !p.isOccupiedByFriendly(player, toCoord) {
-			newMove := p.moveFromAlgebraicParts(originalCoord, toCoord, empty)
-			pseudoLegalMoves.add(newMove)
+		if isForEnemy {
+			enemyAttackBoard.turnOn(toCoord)
+		} else {
+			if !p.isOccupiedByFriendly(toCoord) {
+				newMove := p.moveFromAlgebraicParts(originalCoord, toCoord, empty)
+				moveCandidates.add(newMove)
+			}
 		}
-		if p.getSquare(toCoord) != empty {
+
+		if !p.getSquare(toCoord).isEmpty() {
 			break
 		}
 	}
 }
 
-func (p *Position) surveyKnightActivity(player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
-	knightsBitBoard := p.occupationByColour[player] & p.occupationByPieceType[knight]
+func (p *Position) surveyKnightActivity(c colour, moveCandidates *moveList, enemyAttackBoard *bitBoard) {
+	isForEnemy := c != p.activeColour
+	knightsBitBoard := p.bitBoardsByColour[c] & p.bitBoardsByPieceType[knight]
 
 	for {
 		currentCoord, ok := knightsBitBoard.pop()
@@ -321,10 +266,10 @@ func (p *Position) surveyKnightActivity(player colour, getPsuedoLegalMoves bool,
 		}
 
 		controlledSquares := knightControlFrom[currentCoord]
-		p.controlByColour[player] |= controlledSquares
 
-		if !getPsuedoLegalMoves {
-			return
+		if isForEnemy {
+			*enemyAttackBoard |= controlledSquares
+			continue
 		}
 
 		for {
@@ -333,49 +278,50 @@ func (p *Position) surveyKnightActivity(player colour, getPsuedoLegalMoves bool,
 				break
 			}
 
-			if !p.isOccupiedByFriendly(player, toCoord) {
+			if !p.isOccupiedByFriendly(c, toCoord) {
 				newMove := p.moveFromAlgebraicParts(currentCoord, toCoord, empty)
-				pseudoLegalMoves.add(newMove)
+				moveCandidates.add(newMove)
 			}
 		}
 	}
 }
 
-func (p *Position) surveyPawnActivity(player colour, getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
-	switch player {
+func (p *Position) surveyPawnActivity(c colour, moveCandidates *moveList, enemyAttackBoard *bitBoard) {
+	switch c {
 	case white:
-		p.surveyPawnActivityWhite(getPsuedoLegalMoves, pseudoLegalMoves)
+		p.surveyPawnActivityWhite(moveCandidates, enemyAttackBoard)
 	case black:
-		p.surveyPawnActivityBlack(getPsuedoLegalMoves, pseudoLegalMoves)
+		p.surveyPawnActivityBlack(moveCandidates, enemyAttackBoard)
 	}
 }
 
-func (p *Position) surveyPawnActivityWhite(getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
-	pawnBitBoard := p.occupationByColour[white] & p.occupationByPieceType[pawn]
+func (p *Position) surveyPawnActivityWhite(moveCandidates *moveList, enemyAttackBoard *bitBoard) {
+	isForEnemy := p.activeColour == black
+	pawnBitBoard := p.bitBoardsByColour[white] & p.bitBoardsByPieceType[pawn]
 
-	kingSideControl := (pawnBitBoard & ^fileH) << 9
-	queenSideControl := (pawnBitBoard & ^fileA) << 7
-	p.controlByColour[white] |= kingSideControl | queenSideControl
+	kingSideControl := (pawnBitBoard & ^bitBoardFileHMask) << 9
+	queenSideControl := (pawnBitBoard & ^bitBoardFileAMask) << 7
 
-	if !getPsuedoLegalMoves {
+	if isForEnemy {
+		*enemyAttackBoard |= kingSideControl | queenSideControl
 		return
 	}
 
-	capturableSquares := p.occupationByColour[black]
-	if p.enPassantSquare != nullCoordinate {
-		capturableSquares.turnOn(p.enPassantSquare)
+	capturableSquares := p.bitBoardsByColour[black]
+	if !p.enPassantSquare.isEmpty() {
+		capturableSquares.turnOn(p.enPassantSquare.getValue())
 	}
 
 	occupiedSquares := p.getOccupationBitBoard()
 	addWhitePawnMoves := func(from coordinate, to coordinate) {
-		if to.getRankIndex() != 7 {
-			pseudoLegalMoves.add(p.moveFromAlgebraicParts(from, to, empty))
+		if to.getRank() != 7 {
+			moveCandidates.add(p.moveFromAlgebraicParts(from, to, empty))
 			return
 		}
 
 		for _, promotionPiece := range []squareState{whiteQueen, whiteRook, whiteBishop, whiteKnight} {
 			promotion := p.moveFromAlgebraicParts(from, to, promotionPiece)
-			pseudoLegalMoves.add(promotion)
+			moveCandidates.add(promotion)
 		}
 	}
 
@@ -402,7 +348,7 @@ func (p *Position) surveyPawnActivityWhite(getPsuedoLegalMoves bool, pseudoLegal
 	}
 
 	oneSquareForward := (pawnBitBoard << 8) & ^occupiedSquares
-	twoSquaresForward := (oneSquareForward << 8) & rank4 & ^occupiedSquares
+	twoSquaresForward := (oneSquareForward << 8) & bitBoardRank4Mask & ^occupiedSquares
 
 	for {
 		toCoord, ok := oneSquareForward.pop()
@@ -422,37 +368,38 @@ func (p *Position) surveyPawnActivityWhite(getPsuedoLegalMoves bool, pseudoLegal
 
 		fromCoord := toCoord - 16
 		newMove := p.moveFromAlgebraicParts(fromCoord, toCoord, empty)
-		pseudoLegalMoves.add(newMove)
+		moveCandidates.add(newMove)
 	}
 }
 
-func (p *Position) surveyPawnActivityBlack(getPsuedoLegalMoves bool, pseudoLegalMoves *moveList) {
-	pawnBitBoard := p.occupationByColour[black] & p.occupationByPieceType[pawn]
+func (p *Position) surveyPawnActivityBlack(moveCandidates *moveList, enemyAttackBoard *bitBoard) {
+	isForEnemy := p.activeColour == white
+	pawnBitBoard := p.bitBoardsByColour[black] & p.bitBoardsByPieceType[pawn]
 
-	kingSideControl := (pawnBitBoard & ^fileH) >> 7
-	queenSideControl := (pawnBitBoard & ^fileA) >> 9
-	p.controlByColour[black] |= kingSideControl | queenSideControl
+	kingSideControl := (pawnBitBoard & ^bitBoardFileHMask) >> 7
+	queenSideControl := (pawnBitBoard & ^bitBoardFileAMask) >> 9
 
-	if !getPsuedoLegalMoves {
+	if isForEnemy {
+		*enemyAttackBoard |= kingSideControl | queenSideControl
 		return
 	}
 
-	capturableSquares := p.occupationByColour[white]
-	if p.enPassantSquare != nullCoordinate {
-		capturableSquares.turnOn(p.enPassantSquare)
+	capturableSquares := p.bitBoardsByColour[white]
+	if !p.enPassantSquare.isEmpty() {
+		capturableSquares.turnOn(p.enPassantSquare.getValue())
 	}
 
 	occupiedSquares := p.getOccupationBitBoard()
 	addBlackPawnMoves := func(from coordinate, to coordinate) {
-		if to.getRankIndex() != 0 {
+		if to.getRank() != 0 {
 			newMove := p.moveFromAlgebraicParts(from, to, empty)
-			pseudoLegalMoves.add(newMove)
+			moveCandidates.add(newMove)
 			return
 		}
 
 		for _, promotionPiece := range []squareState{blackQueen, blackRook, blackBishop, blackKnight} {
 			promotion := p.moveFromAlgebraicParts(from, to, promotionPiece)
-			pseudoLegalMoves.add(promotion)
+			moveCandidates.add(promotion)
 		}
 	}
 
@@ -479,7 +426,7 @@ func (p *Position) surveyPawnActivityBlack(getPsuedoLegalMoves bool, pseudoLegal
 	}
 
 	oneSquareForward := (pawnBitBoard >> 8) & ^occupiedSquares
-	twoSquaresForward := (oneSquareForward >> 8) & rank5 & ^occupiedSquares
+	twoSquaresForward := (oneSquareForward >> 8) & bitBoardRank5Mask & ^occupiedSquares
 
 	for {
 		toCoord, ok := oneSquareForward.pop()
@@ -499,7 +446,7 @@ func (p *Position) surveyPawnActivityBlack(getPsuedoLegalMoves bool, pseudoLegal
 
 		fromCoord := toCoord + 16
 		newMove := p.moveFromAlgebraicParts(fromCoord, toCoord, empty)
-		pseudoLegalMoves.add(newMove)
+		moveCandidates.add(newMove)
 	}
 }
 
@@ -517,7 +464,7 @@ func (p *Position) makePseudoLegalMove(theMove move) {
 	fromCoord := theMove.getFromCoordinate()
 	toCoord := theMove.getToCoordinate()
 	EPSquare := theMove.getCurrentEPSquare()
-	pieceBeingMoved := p.getSquare(fromCoord)
+	pieceBeingMoved := p.getSquare(fromCoord).getValue()
 
 	switch pieceBeingMoved {
 	case whiteKing:
@@ -574,8 +521,6 @@ func (p *Position) makePseudoLegalMove(theMove move) {
 	}
 
 	p.activeColour = p.activeColour.getOpponent()
-
-	p.doStaticAnalysis()
 }
 
 func (p *Position) unmakeMove(theMove move) {
@@ -606,24 +551,32 @@ func (p *Position) unmakeMove(theMove move) {
 	}
 }
 
-func (p Position) inCheck(player colour) bool {
-	return p.isAttackedByEnemy(player, p.kingSquares[player])
-}
-
-func (p Position) isAttackedByEnemy(player colour, theCoord coordinate) bool {
-	return p.controlByColour[player.getOpponent()].get(theCoord)
-}
-
-func (p Position) isOccupiedByFriendly(player colour, theCoord coordinate) bool {
-	return p.occupationByColour[player].get(theCoord)
-}
-
-func (p Position) allowsSafePassage(player colour, theCoord coordinate) bool {
-	return !p.getOccupationBitBoard().get(theCoord) && !p.isAttackedByEnemy(player, theCoord)
+func (p Position) isOccupiedByFriendly(c coordinate) bool {
+	return p.bitBoardsByColour[p.activeColour].get(c)
 }
 
 func (p Position) getOccupationBitBoard() bitBoard {
-	return p.occupationByColour[white] | p.occupationByColour[black]
+	return p.bitBoardsByColour[white] | p.bitBoardsByColour[black]
+}
+
+func (p Position) getSquare(c coordinate) option[piece] {
+	return p.board[c]
+}
+
+func (p *Position) clearSquare(c coordinate) {
+	p.board[c].clear()
+	p.bitBoardsByColour[white].turnOff(c)
+	p.bitBoardsByColour[black].turnOff(c)
+
+	for idx := range p.bitBoardsByPieceType {
+		p.bitBoardsByPieceType[idx].turnOff(c)
+	}
+}
+
+func (p *Position) setSquare(c coordinate, pc piece) {
+	p.board[c].setValue(pc)
+	p.bitBoardsByColour[pc.getColour()].turnOn(c)
+	p.bitBoardsByPieceType[pc.getPieceType()].turnOn(c)
 }
 
 func (p *Position) MakeMove(theMove algebraicMove) error {
