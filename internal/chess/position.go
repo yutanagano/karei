@@ -103,35 +103,77 @@ func PositionFromFEN(f FEN) (Position, error) {
 
 func (p *Position) getLegalMoves() moveList {
 	moves := moveList{}
-	enemyAttackBoard := bitBoard(0)
 
-	p.surveyActivity(p.activeColour.getOpponent(), &moves, &enemyAttackBoard)
-	p.surveyActivity(p.activeColour, &moves, &enemyAttackBoard)
+	enemyAttackBoard := p.getEnemyAttackBoard()
+	p.getKingPseudoLegalMoves(&moves)
+	p.getQueenPseudoLegalMoves(&moves)
+	p.getRookPseudoLegalMoves(&moves)
+	p.getBishopPseudoLegalMoves(&moves)
+	p.getKnightPseudoLegalMoves(&moves)
+	p.getPawnPseudoLegalMoves(&moves)
 
 	moves.filter(p.isLegalMove)
 
 	return moves
 }
 
-func (p Position) surveyActivity(c colour, moveCandidates *moveList, enemyAttackBoard *bitBoard) {
-	p.surveyKingActivity(c, moveCandidates, enemyAttackBoard)
-	p.surveyQueenActivity(c, moveCandidates, enemyAttackBoard)
-	p.surveyRookActivity(c, moveCandidates, enemyAttackBoard)
-	p.surveyBishopActivity(c, moveCandidates, enemyAttackBoard)
-	p.surveyKnightActivity(c, moveCandidates, enemyAttackBoard)
-	p.surveyPawnActivity(c, moveCandidates, enemyAttackBoard)
+func (p Position) getEnemyAttackBoard() bitBoard {
+	enemyColour := p.activeColour.getOpponent()
+	enemyOccupationBoard := p.bitBoardsByColour[enemyColour]
+	generalOccupationBoard := p.getOccupationBitBoard()
+	enemyAttackBoard := bitBoard(0)
+
+	enemyKingBoard := enemyOccupationBoard & p.bitBoardsByPieceType[king]
+	enemyKingCoord, _ := enemyKingBoard.pop()
+	enemyAttackBoard |= getKingControlBitBoard(enemyKingCoord)
+
+	enemyQueenBoard := enemyOccupationBoard & p.bitBoardsByPieceType[queen]
+	for {
+		enemyQueenCoord, ok := enemyQueenBoard.pop()
+		if !ok {
+			break
+		}
+		enemyAttackBoard |= getQueenControlBitBoard(enemyQueenCoord, generalOccupationBoard)
+	}
+
+	enemyRookBoard := enemyOccupationBoard & p.bitBoardsByPieceType[rook]
+	for {
+		enemyRookCoord, ok := enemyRookBoard.pop()
+		if !ok {
+			break
+		}
+		enemyAttackBoard |= getRookControlBitBoard(enemyRookCoord, generalOccupationBoard)
+	}
+
+	enemyBishopBoard := enemyOccupationBoard & p.bitBoardsByPieceType[bishop]
+	for {
+		enemyBishopCoord, ok := enemyBishopBoard.pop()
+		if !ok {
+			break
+		}
+		enemyAttackBoard |= getBishopControlBitBoard(enemyBishopCoord, generalOccupationBoard)
+	}
+
+	enemyKnightBoard := enemyOccupationBoard & p.bitBoardsByPieceType[knight]
+	for {
+		enemyKnightCoord, ok := enemyKnightBoard.pop()
+		if !ok {
+			break
+		}
+		enemyAttackBoard |= getKnightControlBitBoard(enemyKnightCoord)
+	}
+
+	enemyPawnBoard := enemyOccupationBoard & p.bitBoardsByPieceType[pawn]
+	enemyAttackBoard |= getPawnKingSideControlBitBoard(enemyPawnBoard, enemyColour)
+	enemyAttackBoard |= getPawnQueenSideControlBitBoard(enemyPawnBoard, enemyColour)
+
+	return enemyAttackBoard
 }
 
-func (p Position) surveyKingActivity(c colour, moveCandidates *moveList, enemyAttackBoard *bitBoard) {
-	isForEnemy := c != p.activeColour
-	kingBitBoard := p.bitBoardsByColour[c] ^ p.bitBoardsByPieceType[king]
+func (p Position) getKingPseudoLegalMoves(enemyAttackBoard bitBoard, moveCandidates *moveList) {
+	kingBitBoard := p.bitBoardsByColour[p.activeColour] & p.bitBoardsByPieceType[king]
 	currentCoord, _ := kingBitBoard.pop()
-	controlledSquares := kingControlFrom[currentCoord]
-
-	if isForEnemy {
-		*enemyAttackBoard |= controlledSquares
-		return
-	}
+	controlledSquares := getKingControlBitBoard(currentCoord)
 
 	for {
 		toCoord, ok := controlledSquares.pop()
@@ -140,7 +182,7 @@ func (p Position) surveyKingActivity(c colour, moveCandidates *moveList, enemyAt
 		}
 
 		if !enemyAttackBoard.get(toCoord) && !p.isOccupiedByFriendly(toCoord) {
-			newMove := p.moveFromAlgebraicParts(currentCoord, toCoord, empty)
+			newMove := p.moveFromAlgebraicParts(currentCoord, toCoord, newEmptyOption[piece]())
 			moveCandidates.add(newMove)
 		}
 	}
@@ -150,69 +192,121 @@ func (p Position) surveyKingActivity(c colour, moveCandidates *moveList, enemyAt
 	}
 
 	clearForCastling := func(c coordinate) bool {
-		return !(p.getOccupationBitBoard() | *enemyAttackBoard).get(c)
+		return !(p.getOccupationBitBoard() | enemyAttackBoard).get(c)
 	}
 
-	switch c {
+	switch p.activeColour {
 	case white:
 		if p.castlingRights.isSet(whiteCastleKingSide) && clearForCastling(f1) && clearForCastling(g1) {
-			whiteKingSideCastle := p.moveFromAlgebraicParts(e1, g1, empty)
+			whiteKingSideCastle := p.moveFromAlgebraicParts(e1, g1, newEmptyOption[piece]())
 			moveCandidates.add(whiteKingSideCastle)
 		}
 		if p.castlingRights.isSet(whiteCastleQueenSide) && clearForCastling(d1) && clearForCastling(c1) {
-			whiteQueenSideCastle := p.moveFromAlgebraicParts(e1, g1, empty)
+			whiteQueenSideCastle := p.moveFromAlgebraicParts(e1, g1, newEmptyOption[piece]())
 			moveCandidates.add(whiteQueenSideCastle)
 		}
 	case black:
 		if p.castlingRights.isSet(blackCastleKingSide) && clearForCastling(f8) && clearForCastling(g8) {
-			blackKingSideCastle := p.moveFromAlgebraicParts(e1, g1, empty)
+			blackKingSideCastle := p.moveFromAlgebraicParts(e1, g1, newEmptyOption[piece]())
 			moveCandidates.add(blackKingSideCastle)
 		}
 		if p.castlingRights.isSet(blackCastleQueenSide) && clearForCastling(d8) && clearForCastling(c8) {
-			blackQueenSideCastle := p.moveFromAlgebraicParts(e1, g1, empty)
+			blackQueenSideCastle := p.moveFromAlgebraicParts(e1, g1, newEmptyOption[piece]())
 			moveCandidates.add(blackQueenSideCastle)
 		}
 	}
 }
 
-func (p *Position) surveyQueenActivity(c colour, moveCandidates *moveList, enemyAttackBoard *bitBoard) {
-	queensBitBoard := p.bitBoardsByColour[c] & p.bitBoardsByPieceType[queen]
+func (p Position) getQueenPseudoLegalMoves(moveCandidates *moveList) {
+	occupiedSquares := p.getOccupationBitBoard()
+
+	queensBitBoard := p.bitBoardsByColour[p.activeColour] & p.bitBoardsByPieceType[queen]
 	for {
 		currentCoord, ok := queensBitBoard.pop()
 		if !ok {
 			break
 		}
 
-		for _, o := range []gridOffset{
-			{1, 0},
-			{1, 1},
-			{0, 1},
-			{-1, 1},
-			{-1, 0},
-			{-1, -1},
-			{0, -1},
-			{1, -1},
-		} {
-			p.surveySlidingControlFromCoordinate(currentCoord, o, c, moveCandidates, enemyAttackBoard)
+		controlBitBoard := getQueenControlBitBoard(currentCoord, occupiedSquares)
+		for {
+			toCoord, ok := controlBitBoard.pop()
+			if !ok {
+				break
+			}
+			if !p.isOccupiedByFriendly(toCoord) {
+				newMove := p.moveFromAlgebraicParts(currentCoord, toCoord, newEmptyOption[piece]())
+				moveCandidates.add(newMove)
+			}
 		}
 	}
 }
 
-func (p *Position) surveyRookActivity(c colour, moveCandiddates *moveList, enemyAttackBoard *bitBoard) {
-	rooksBitBoard := p.bitBoardsByColour[c] & p.bitBoardsByPieceType[rook]
+func (p Position) getRookPseudoLegalMoves(moveCandidates *moveList) {
+	occupiedSquares := p.getOccupationBitBoard()
+
+	rooksBitBoard := p.bitBoardsByColour[p.activeColour] & p.bitBoardsByPieceType[rook]
 	for {
 		currentCoord, ok := rooksBitBoard.pop()
 		if !ok {
 			break
 		}
 
-		for _, o := range []gridOffset{
-			{1, 0},
-			{0, 1},
-			{-1, 0},
-			{0, -1},
-		} {
-			p.surveySlidingControlFromCoordinate(currentCoord, o, c, moveCandiddates, enemyAttackBoard)
+		controlBitBoard := getRookControlBitBoard(currentCoord, occupiedSquares)
+		for {
+			toCoord, ok := controlBitBoard.pop()
+			if !ok {
+				break
+			}
+			if !p.isOccupiedByFriendly(toCoord) {
+				newMove := p.moveFromAlgebraicParts(currentCoord, toCoord, newEmptyOption[piece]())
+				moveCandidates.add(newMove)
+			}
+		}
+	}
+}
+
+func (p Position) getBishopPseudoLegalMoves(moveCandidates *moveList) {
+	occupiedSquares := p.getOccupationBitBoard()
+
+	bishopsBitBoard := p.bitBoardsByColour[p.activeColour] & p.bitBoardsByPieceType[bishop]
+	for {
+		currentCoord, ok := bishopsBitBoard.pop()
+		if !ok {
+			break
+		}
+
+		controlBitBoard := getBishopControlBitBoard(currentCoord, occupiedSquares)
+		for {
+			toCoord, ok := controlBitBoard.pop()
+			if !ok {
+				break
+			}
+			if !p.isOccupiedByFriendly(toCoord) {
+				newMove := p.moveFromAlgebraicParts(currentCoord, toCoord, newEmptyOption[piece]())
+				moveCandidates.add(newMove)
+			}
+		}
+	}
+}
+
+func (p Position) getKnightPseudoLegalMoves(moveCandidates *moveList) {
+	knightsBitBoard := p.bitBoardsByColour[p.activeColour] & p.bitBoardsByPieceType[knight]
+	for {
+		currentCoord, ok := knightsBitBoard.pop()
+		if !ok {
+			break
+		}
+
+		controlBitBoard := getKnightControlBitBoard(currentCoord)
+		for {
+			toCoord, ok := controlBitBoard.pop()
+			if !ok {
+				break
+			}
+			if !p.isOccupiedByFriendly(toCoord) {
+				newMove := p.moveFromAlgebraicParts(currentCoord, toCoord, newEmptyOption[piece]())
+				moveCandidates.add(newMove)
+			}
 		}
 	}
 }
@@ -232,25 +326,6 @@ func (p *Position) surveyBishopActivity(c colour, moveCandidates *moveList, enem
 			{1, -1},
 		} {
 			p.surveySlidingControlFromCoordinate(currentCoord, o, c, moveCandidates, enemyAttackBoard)
-		}
-	}
-}
-
-func (p *Position) surveySlidingControlFromCoordinate(originalCoord coordinate, unitDelta gridOffset, c colour, moveCandidates *moveList, enemyAttackBoard *bitBoard) {
-	isForEnemy := c != p.activeColour
-
-	for toCoord, err := originalCoord.move(unitDelta); err == nil; toCoord, err = toCoord.move(unitDelta) {
-		if isForEnemy {
-			enemyAttackBoard.turnOn(toCoord)
-		} else {
-			if !p.isOccupiedByFriendly(toCoord) {
-				newMove := p.moveFromAlgebraicParts(originalCoord, toCoord, empty)
-				moveCandidates.add(newMove)
-			}
-		}
-
-		if !p.getSquare(toCoord).isEmpty() {
-			break
 		}
 	}
 }
@@ -450,8 +525,8 @@ func (p *Position) surveyPawnActivityBlack(moveCandidates *moveList, enemyAttack
 	}
 }
 
-func (p Position) moveFromAlgebraicParts(from, to coordinate, promotionTo squareState) move {
-	return moveFromParts(from, to, p.getSquare(to), promotionTo, p.castlingRights, p.enPassantSquare)
+func (p Position) moveFromAlgebraicParts(from, to coordinate, promotionTo option[piece]) move {
+	return moveFromParts(from, to, p.getSquare(to).getValue(), promotionTo, p.castlingRights, p.enPassantSquare)
 }
 
 func (p *Position) isLegalMove(theMove move) bool {
